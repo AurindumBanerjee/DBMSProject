@@ -1,92 +1,56 @@
-/* pftypes.h: declarations for Paged File interface */
+/* pftypes.h: types for PF layer */
+/* This file is included by pf.c and buf.c */
 
-/**************************** File Page Decls *********************/
-/* Each file contains a header, which is a integer pointing
-to the first free page, or -1 if no more free pages in the file.
-Followed by this header are the file pages as declared in struct PFfpage */
+/* size of page */
+#define PF_PAGE_SIZE 4096
+
+/* page file header */
 typedef struct PFhdr_str {
-	int	firstfree;	/* first free page in the linked list of
-				free pages */
+	int	firstfree;	/* first free page in the file */
 	int	numpages;	/* # of pages in the file */
 } PFhdr_str;
 
-#define PF_HDR_SIZE sizeof(PFhdr_str)	/* size of file header */
-
-/* actual page struct to be written onto the file */
-#define PF_PAGE_LIST_END	-1	/* end of list of free pages */
-#define PF_PAGE_USED		-2	/* page is being used */
+/* page data */
 typedef struct PFfpage {
-	int nextfree;	/* page number of next free page in the linked
-			list of free pages, or PF_PAGE_LIST_END if
-			end of list, or PF_PAGE_USED if this page is not free */
-	char pagebuf[PF_PAGE_SIZE];	/* actual page data */
+	char pagebuf[PF_PAGE_SIZE];
 } PFfpage;
 
-/*************************** Opened File Table **********************/
-#define PF_FTAB_SIZE	20	/* size of open file table */
-
-/* open file table entry */
-typedef struct PFftab_ele {
-	char *fname;	/* file name, or NULL if entry not used */
-	int unixfd;	/* unix file descriptor*/
-	PFhdr_str hdr;	/* file header */
-	short hdrchanged; /* TRUE if file header has changed */
-} PFftab_ele;
-
-/************************** Buffer Page Decls *********************/
-#define PF_MAX_BUFS	20	/* max # of buffers */
-
-/* buffer page decl */
+/* page buffer entry */
 typedef struct PFbpage {
-	struct PFbpage *nextpage;	/* next in the linked list of
-					buffer page */
-	struct PFbpage *prevpage;	/* previous in the linked list
-					of buffer pages */
-	short	dirty:1,		/* TRUE if page is dirty */
-		fixed:1;		/* TRUE if page is fixed in buffer*/
-	int	page;			/* page number of this page */
-	int	fd;			/* file desciptor of this page */
-	PFfpage fpage; /* page data from the file */
-
-	long timestamp;
-
+	PFfpage fpage;		/* page data */
+	struct PFbpage *nextpage;	/* next in the buffer list */
+	struct PFbpage *prevpage;	/* prev in the buffer list */
+	int fd;			/* file descriptor */
+	int page;		/* page number */
+	unsigned int fixed:1;	/* TRUE if page is fixed */
+	unsigned int dirty:1;	/* TRUE if page is dirty */
 } PFbpage;
 
-
-
-/******************** Hash Table Decls ****************************/
-#define PF_HASH_TBL_SIZE	20	/* size of PF hash table */
-
-/* Hash table bucket entries*/
+/* hash table entry */
 typedef struct PFhash_entry {
-	struct PFhash_entry *nextentry; /* next hash table element, or NULL */
-	struct PFhash_entry *preventry;/*previous hash table element,or NULL*/
-	int fd;		/* file descriptor */
-	int page;	/* page number */
-	struct PFbpage *bpage; /* pointer to buffer holding this page */
+	int fd;			/* file descriptor */
+	int page;		/* page number */
+	PFbpage *bpage;		/* ptr to buffer page */
+	struct PFhash_entry *nextentry; /* next hash table entry */
 } PFhash_entry;
 
-/* Hash function for hash table */
-#define PFhash(fd,page) (((fd)+(page)) % PF_HASH_TBL_SIZE)
+/* file table entry */
+typedef struct PFftab_ele {
+	char *fname;		/* file name */
+	int unixfd;		/* unix file descriptor */
+	PFhdr_str hdr;		/* file header */
+	unsigned int hdrchanged:1;	/* TRUE if header changed */
+} PFftab_ele;
 
-/******************* Interface functions from Hash Table ****************/
-extern void PFhashInit();
-extern PFbpage *PFhashFind();
-extern int PFhashInsert();
-extern int PFhashDelete();
-extern void PFhashPrint();
 
-/****************** Interface functions from Buffer Manager *************/
-extern int PFbufGet();
-extern int PFbufUnfix();
-extern int PFbufAlloc();
-extern int PFbufReleaseFile();
+/* max # of files open at the same time */
+#define PF_FTAB_SIZE 20
 
-// MRU LRU Globals
-extern int PFStrategy; // 0 = LRU, 1 = MRU
-extern long PFLogicalIO; // Logical I/O count
-extern long PFPhysicalIO; // Physical I/O count
-extern long PF_Disk_Reads;  // Tracks the number of disk reads
-extern long PF_Disk_Writes; // Tracks the number of disk writes
+/* max # of pages in the buffer */
+#define PF_MAX_BUFS 20
 
-extern int PFMarkDirty(int fileDesc, int pageNum);
+/* end of page list */
+#define PF_PAGE_LIST_END -1
+
+/* hash table size */
+#define PF_HASH_TBL_SIZE 20

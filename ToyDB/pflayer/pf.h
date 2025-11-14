@@ -6,6 +6,18 @@
 #define FALSE 0
 #endif
 
+/* === MODIFIED GLOBALS === */
+/* Configuration (set by main/test program BEFORE PF_Init) */
+extern int PF_BUFFER_SIZE;         /* Max # of buffer pages */
+extern int PF_REPLACEMENT_STRATEGY; /* 0 for LRU, 1 for MRU */
+
+/* Statistics (read by main/test program) */
+extern long PF_Logical_IO;
+extern long PF_Disk_Reads;  
+extern long PF_Disk_Writes; 
+/* === END OF MODIFIED GLOBALS === */
+
+
 /************** Error Codes *********************************/
 #define PFE_OK		0	/* OK */
 #define PFE_NOMEM	-1	/* no memory */
@@ -31,13 +43,18 @@
 #define PFE_HASHPAGEEXIST -19	/* page already exist in hash table */
 
 
-/* page size */
-#define PF_PAGE_SIZE	4096
-
 /* externs from the PF layer */
 extern int PFerrno;		/* error number of last error */
 extern void PF_Init();
-extern void PF_PrintError();
+extern int PF_CreateFile(char *fname);
+extern int PF_DestroyFile(char *fname);
+extern int PF_OpenFile(char *fname);
+extern int PF_CloseFile(int fd);
+extern int PF_AllocPage(int fd, int *pagenum, char **pagebuf);
+extern int PF_DisposePage(int fd, int pagenum, char *pagebuf);
+extern int PF_GetThisPage(int fd, int pagenum, char **pagebuf);
+extern int PF_UnfixPage(int fd, int pagenum, int dirty);
+extern void PF_PrintError(char *s);
 
-extern long DiskReads;  // Tracks the number of disk reads
-extern long DiskWrites; // Tracks the number of disk writes
+/* === ADDED FUNCTION PROTOTYPE === */
+extern int PF_MarkDirty(int fd, int pagenum);
