@@ -47,6 +47,9 @@ typedef struct PFbpage {
 	int	page;			/* page number of this page */
 	int	fd;			/* file desciptor of this page */
 	PFfpage fpage; /* page data from the file */
+
+	long timestamp;
+
 } PFbpage;
 
 
@@ -78,3 +81,12 @@ extern PFbufGet();
 extern PFbufUnfix();
 extern PFbufalloc();
 extern PFbufReleaseFile();
+
+// MRU LRU Globals
+extern int PF_BUFFER_SIZE; 
+extern int PF_REPLACEMENT_STRATEGY; /* 0 = LRU, 1 = MRU */
+extern long PF_Logical_IO; /* Logical I/O count */
+extern long PF_Physical_IO; /* Physical I/O count */
+
+/* === ADD THIS PROTOTYPE === */
+extern int PFMarkDirty(int fileDesc, int pageNum);

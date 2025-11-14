@@ -5,7 +5,6 @@
 
 #define FILE1	"file1"
 #define FILE2	"file2"
-
 main()
 {
 int error;
