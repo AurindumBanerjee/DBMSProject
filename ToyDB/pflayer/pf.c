@@ -1,5 +1,6 @@
 /* pf.c: Paged File Interface Routines+ support routines */
 #include <stdio.h>
+#include <stdlib.h>
 #include <sys/types.h>
 #include <fcntl.h>
 #include <sys/file.h>
@@ -10,6 +11,10 @@
 #ifndef L_SET
 #define L_SET 0
 #endif
+
+
+long DiskReads = 0;  // Tracks the number of disk reads
+long DiskWrites = 0; // Tracks the number of disk writes
 
 int PFerrno = PFE_OK;	/* last error message */
 
@@ -608,6 +613,8 @@ RETURN VALUE:
         return PFerrno;
     }
 
+	DiskWrites++; /* increment disk write count */
+
     return PFE_OK;
 }
 
@@ -675,6 +682,8 @@ RETURN VALUE:
         PFerrno = PFE_HDRWRITE;
         return PFerrno;
     }
+
+	DiskWrites ++;
 
     return PFE_OK;
 }

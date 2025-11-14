@@ -38,3 +38,6 @@
 extern int PFerrno;		/* error number of last error */
 extern void PF_Init();
 extern void PF_PrintError();
+
+extern long DiskReads;  // Tracks the number of disk reads
+extern long DiskWrites; // Tracks the number of disk writes

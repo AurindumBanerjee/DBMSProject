@@ -83,8 +83,10 @@ extern PFbufalloc();
 extern PFbufReleaseFile();
 
 // MRU LRU Globals
-extern int PFStrategy; /* 0 = LRU, 1 = MRU */
-extern long PFLogicalIO; /* Logical I/O count */
-extern long PFPhysicalIO; /* Physical I/O count */
+extern int PFStrategy; // 0 = LRU, 1 = MRU
+extern long PFLogicalIO; // Logical I/O count
+extern long PFPhysicalIO; // Physical I/O count
+extern long PF_Disk_Reads;  // Tracks the number of disk reads
+extern long PF_Disk_Writes; // Tracks the number of disk writes
 
 extern int PFMarkDirty(int fileDesc, int pageNum);

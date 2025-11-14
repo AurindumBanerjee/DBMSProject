@@ -2,6 +2,8 @@
 PFbufGet(), PFbufUnfix(), PFbufAlloc(), PFbufReleaseFile(), PFbufUsed() and
 PFbufPrint() */
 #include <stdio.h>
+#include <stdlib.h>
+#include <unistd.h>
 #include "pf.h"
 #include "pftypes.h"
 
@@ -16,7 +18,6 @@ int PFStrategy = 0; // 0 = LRU, 1 = MRU
 //Statistics
 long PFLogicalIO = 0; // Logical I/O count
 long PFPhysicalIO = 0; // Physical I/O count
-
 
 extern char *malloc();
 
@@ -101,6 +102,21 @@ GLOBAL VARIABLES MODIFIED:
 	PFfirstbpage = bpage;
 	if (PFlastbpage == NULL)
 		PFlastbpage = bpage;
+}
+
+
+static void PFbufLinkTail(PFbpage *bpage) {
+    bpage->nextpage = NULL;
+    bpage->prevpage = PFlastbpage;
+
+    if (PFlastbpage != NULL) {
+        PFlastbpage->nextpage = bpage;
+    }
+    PFlastbpage = bpage;
+
+    if (PFfirstbpage == NULL) {
+        PFfirstbpage = bpage;
+    }
 }
 	
 void PFbufUnlink(bpage)
@@ -213,6 +229,8 @@ int error;		/* error value returned*/
 				/* error writing page */
 				return(error);
 			}
+
+			DiskWrites ++;
 			
 		}
 
@@ -271,6 +289,8 @@ GLOBAL VARIABLES MODIFIED:
 PFbpage *bpage;	/* pointer to buffer */
 int error;
 
+PFLogicalIO ++;
+
 	if ((bpage=PFhashFind(fd,pagenum)) == NULL){
 		/* page not in buffer. */
 		
@@ -290,6 +310,8 @@ int error;
 			*fpage = NULL;
 			return(error);
 		}
+
+		DiskReads ++;
 
 		/* insert new page into hash table */
 		if ((error=PFhashInsert(fd,pagenum,bpage))!=PFE_OK){
@@ -369,7 +391,7 @@ PFbpage *bpage;
 	
 	else {
 		// LRU: Move to the tail of the list
-		PFbufLinkTail(bpage); // Implement PFbufLinkTail() if it doesn't exist
+		PFbufLinkTail(bpage);
 	}
 
 	return(PFE_OK);
@@ -395,6 +417,8 @@ RETURN VALUE:
 {
 PFbpage *bpage;
 int error;
+
+PFLogicalIO ++;
 
 	*fpage = NULL;	/* initial value of fpage */
 
@@ -462,10 +486,11 @@ int error;		/* error code */
 			}
 
 			/* write out dirty page */
-			if (bpage->dirty&&((error=(*writefcn)(fd,bpage->page,
-					&bpage->fpage))!= PFE_OK))
+			if (bpage->dirty&&((error=(*writefcn)(fd,bpage->page, &bpage->fpage))!= PFE_OK))
 				/* error writing file */
 				return(error);
+
+			DiskWrites ++;
 			bpage->dirty = FALSE;
 
 			/* get rid of it from the hash table */
