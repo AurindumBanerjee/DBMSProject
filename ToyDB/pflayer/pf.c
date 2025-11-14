@@ -2,6 +2,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <sys/types.h>
+#include <unistd.h>
 #include <fcntl.h>
 #include <sys/file.h>
 #include <string.h>
@@ -297,46 +298,29 @@ IMPLEMENTATION NOTES:
 	returned. Separate buffers are used.
 *****************************************************************************/
 {
-int count;	/* # of bytes in read */
-int fd; /* file descriptor */
+    int fd;
 
-	/* find a free entry in the file table */
-	if ((fd=PFftabFindFree())< 0){
-		/* file table full */
-		PFerrno = PFE_FTABFULL;
-		return(PFerrno);
-	}
+    // Open the file
+    do {
+        fd = open(fname, O_RDWR);
+        if (fd < 0) {
+            perror("PF_OpenFile: open failed");
+            PFerrno = PFE_UNIX;
+            return PFerrno;
+        }
 
-	/* open the file */
-	if ((PFftab[fd].unixfd = open(fname,O_RDWR))< 0){
-		/* can't open the file */
-		PFerrno = PFE_UNIX;
-		return(PFerrno);
-	}
+        // If fd is 0, 1, or 2, close it and try again
+        if (fd == 0 || fd == 1 || fd == 2) {
+            close(fd);
+        }
+    } while (fd == 0 || fd == 1 || fd == 2);
 
-	/* Read the file header */
-	if ((count=read(PFftab[fd].unixfd,(char *)&PFftab[fd].hdr,PF_HDR_SIZE))
-				!= PF_HDR_SIZE){
-		if (count < 0)
-			/* unix error */
-			PFerrno = PFE_UNIX;
-		else	/* not enough bytes in file */
-			PFerrno = PFE_HDRREAD;
-		close(PFftab[fd].unixfd);
-		return(PFerrno);
-	}
-	/* set file header to be not changed */
-	PFftab[fd].hdrchanged = FALSE;
+    // Initialize the file table entry
+    PFftab[fd].unixfd = fd;
+    PFftab[fd].fname = savestr(fname);
+    PFftab[fd].hdrchanged = FALSE;
 
-	/* save the file name */
-	if ((PFftab[fd].fname = savestr(fname)) == NULL){
-		/* no memory */
-		close(PFftab[fd].unixfd);
-		PFerrno = PFE_NOMEM;
-		return(PFerrno);
-	}
-
-	return(fd);
+    return fd;
 }
 
 int PF_CloseFile(fd)

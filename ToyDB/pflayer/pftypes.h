@@ -72,15 +72,15 @@ typedef struct PFhash_entry {
 /******************* Interface functions from Hash Table ****************/
 extern void PFhashInit();
 extern PFbpage *PFhashFind();
-extern PFhashInsert();
-extern PFhashDelete();
-extern PFhashPrint();
+extern int PFhashInsert();
+extern int PFhashDelete();
+extern void PFhashPrint();
 
 /****************** Interface functions from Buffer Manager *************/
-extern PFbufGet();
-extern PFbufUnfix();
-extern PFbufalloc();
-extern PFbufReleaseFile();
+extern int PFbufGet();
+extern int PFbufUnfix();
+extern int PFbufAlloc();
+extern int PFbufReleaseFile();
 
 // MRU LRU Globals
 extern int PFStrategy; // 0 = LRU, 1 = MRU

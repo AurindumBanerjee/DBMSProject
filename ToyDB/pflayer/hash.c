@@ -167,7 +167,7 @@ PFhash_entry *entry;	/* entry to look for */
 }
 
 
-int PFhashPrint()
+void PFhashPrint()
 /****************************************************************************
 SPECIFICATIONS:
 	Print the hash table entries.

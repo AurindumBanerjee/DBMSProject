@@ -395,6 +395,29 @@ PFbpage *bpage;
 	return(PFE_OK);
 }
 
+void PFbufInit() {
+    int i;
+
+    // Initialize the free buffer list
+    PFfreebpage = NULL;
+    for (i = 0; i < PF_MAX_BUFS; i++) {
+        PFbpage *bpage = (PFbpage *)malloc(sizeof(PFbpage));
+        if (bpage == NULL) {
+            fprintf(stderr, "PFbufInit: Out of memory\n");
+            exit(1);
+        }
+
+        // Add the page to the free list
+        bpage->nextpage = PFfreebpage;
+        PFfreebpage = bpage;
+    }
+
+    // Initialize the buffer pool
+    PFfirstbpage = NULL;
+    PFlastbpage = NULL;
+    PFnumbpage = 0;
+}
+
 int PFbufAlloc(fd,pagenum,fpage,writefcn)
 int fd;		/* file descriptor */
 int pagenum;	/* page number */
@@ -516,7 +539,7 @@ int error;		/* error code */
 
 
 
-PFbufUsed(fd,pagenum)
+int PFbufUsed(fd,pagenum)
 int fd;		/* file descriptor */
 int pagenum;	/* page number */
 /****************************************************************************
