@@ -186,6 +186,8 @@ int i;
 	/* init the hash table */
 	PFhashInit();
 
+	PFbufInit();
+
 	/* init the file table to be not used*/
 	for (i=0; i < PF_FTAB_SIZE; i++){
 		PFftab[i].fname = NULL;
@@ -206,36 +208,33 @@ RETURN VALUE:
 	PF error code if error.
 *****************************************************************************/
 {
-int fd;	/* unix file descripotr */
-PFhdr_str hdr;	/* file header */
-int error;
+    int fd;
+    PFhdr_str hdr;
+    int numbytes;
 
-	/* create file for exclusive use */
-	if ((fd=open(fname,O_CREAT|O_EXCL|O_WRONLY,0664))<0){
-		/* unix error on open */
-		PFerrno = PFE_UNIX;
-		return(PFE_UNIX);
-	}
+    /* Create the file */
+    if ((fd = creat(fname, 0666)) < 0) {
+        PFerrno = PFE_UNIX;
+        return PFerrno;
+    }
 
-	/* write out the file header */
-	hdr.firstfree = PF_PAGE_LIST_END;	/* no free pag yet */
-	hdr.numpages = 0;
-	if ((error=write(fd,(char *)&hdr,sizeof(hdr))) != sizeof(hdr)){
-		/* error while writing. Abort everything. */
-		if (error < 0)
-			PFerrno = PFE_UNIX;
-		else PFerrno = PFE_HDRWRITE;
-		close(fd);
-		unlink(fname);
-		return(PFerrno);
-	}
+    /* Write the header */
+    hdr.firstfree = PF_PAGE_LIST_END;
+    hdr.numpages = 0;
 
-	if ((error=close(fd)) == -1){
-		PFerrno = PFE_UNIX;
-		return(PFerrno);
-	}
+    if ((numbytes = write(fd, (char *)&hdr, sizeof(PFhdr_str))) != sizeof(PFhdr_str)) {
+        close(fd);
+        PFerrno = PFE_UNIX;
+        return PFerrno;
+    }
 
-	return(PFE_OK);
+    if (close(fd) < 0) {
+        PFerrno = PFE_UNIX;
+        return PFerrno;
+    }
+
+    return PFE_OK;
+
 }
 
 
@@ -564,56 +563,52 @@ RETURN VALUE:
 
 *****************************************************************************/
 {
-PFfpage *fpage;	/* pointer to file page */
-int error;
+    PFhdr_str hdr;
+    int numbytes;
+    int err;
 
-	if (PFinvalidFd(fd)){
-		PFerrno= PFE_FD;
-		return(PFerrno);
-	}
+    /* Read header */
+    if (lseek(fd, 0, SEEK_SET) < 0) {
+        PFerrno = PFE_UNIX;
+        return PFerrno;
+    }
+    if ((numbytes = read(fd, (char *)&hdr, sizeof(PFhdr_str))) != sizeof(PFhdr_str)) {
+        PFerrno = PFE_HDRREAD;
+        return PFerrno;
+    }
 
-	if (PFftab[fd].hdr.firstfree != PF_PAGE_LIST_END){
-		/* get a page from the free list */
-		*pagenum = PFftab[fd].hdr.firstfree;
-		if ((error=PFbufGet(fd,*pagenum,&fpage,PFreadfcn,
-					PFwritefcn))!= PFE_OK)
-			/* can't get the page */
-			return(error);
-		PFftab[fd].hdr.firstfree = fpage->nextfree;
-		PFftab[fd].hdrchanged = TRUE;
-	}
-	else {
-		/* Free list empty, allocate one more page from the file */
-		*pagenum = PFftab[fd].hdr.numpages;
-		if ((error=PFbufAlloc(fd,*pagenum,&fpage,PFwritefcn))!= PFE_OK)
-			/* can't allocate a page */
-			return(error);
-	
-		/* increment # of pages for this file */
-		PFftab[fd].hdr.numpages++;
-		PFftab[fd].hdrchanged = TRUE;
+    /* Check if there is a page on the free list */
+    if (hdr.firstfree != PF_PAGE_LIST_END) {
+        /* Get the first page on the free list */
+        *pagenum = hdr.firstfree;
 
-		/* mark this page dirty */
-		if ((error=PFbufUsed(fd,*pagenum))!= PFE_OK){
-			printf("internal error: PFalloc()\n");
-			exit(1);
-		}
+        /* Get this page via the buffer manager */
+        if ((err = PFbufGet(fd, *pagenum, pagebuf)) != PFE_OK)
+            return err;
 
-	}
+        /* Update the header */
+        hdr.firstfree = *(int *)*pagebuf; /* Next free page */
+    } else {
+        /* No page on free list, allocate a new one at the end */
+        *pagenum = hdr.numpages;
+        hdr.numpages++;
 
-	/* zero out the page. Seems to be a nice thing to do,
-	at least for debugging. */
-	/*
-	bzero(fpage->pagebuf,PF_PAGE_SIZE);
-	*/
+        /* Call PFbufAlloc to get a buffer slot */
+        if ((err = PFbufAlloc(fd, *pagenum, pagebuf)) != PFE_OK)
+            return err;
+    }
 
-	/* Mark the new page used */
-	fpage->nextfree = PF_PAGE_USED;
+    /* Write the updated header back to disk */
+    if (lseek(fd, 0, SEEK_SET) < 0) {
+        PFerrno = PFE_UNIX;
+        return PFerrno;
+    }
+    if ((numbytes = write(fd, (char *)&hdr, sizeof(PFhdr_str))) != sizeof(PFhdr_str)) {
+        PFerrno = PFE_HDRWRITE;
+        return PFerrno;
+    }
 
-	/* set return value */
-	*pagebuf = fpage->pagebuf;
-	
-	return(PFE_OK);
+    return PFE_OK;
 }
 
 PF_DisposePage(fd,pagenum)
@@ -632,40 +627,56 @@ RETURN VALUE:
 
 *****************************************************************************/
 {
-PFfpage *fpage;	/* pointer to file page */
-int error;
+    PFhdr_str hdr;
+    int numbytes;
+    int err;
 
-	if (PFinvalidFd(fd)){
-		PFerrno = PFE_FD;
-		return(PFerrno);
-	}
+    /* Read header */
+    if (lseek(fd, 0, SEEK_SET) < 0) {
+        PFerrno = PFE_UNIX;
+        return PFerrno;
+    }
+    if ((numbytes = read(fd, (char *)&hdr, sizeof(PFhdr_str))) != sizeof(PFhdr_str)) {
+        PFerrno = PFE_HDRREAD;
+        return PFerrno;
+    }
 
-	if (PFinvalidPagenum(fd,pagenum)){
-		PFerrno = PFE_INVALIDPAGE;
-		return(PFerrno);
-	}
+    /* Check for valid page number */
+    if (pagenum < 0 || pagenum >= hdr.numpages) {
+        PFerrno = PFE_INVALIDPAGE;
+        return PFerrno;
+    }
 
-	if ((error=PFbufGet(fd,pagenum,&fpage,PFreadfcn,PFwritefcn))!= PFE_OK)
-		/* can't get this page */
-		return(error);
-	
-	if (fpage->nextfree != PF_PAGE_USED){
-		/* this page already freed */
-		if (PFbufUnfix(fd,pagenum,FALSE)!= PFE_OK){
-			printf("internal error: PFdispose()\n");
-			exit(1);
+	/* Write the old firstfree pointer into the page on disk */
+	{
+		off_t offset = (off_t)pagenum * sizeof(PFfpage) + PF_HDR_SIZE;
+		if (lseek(fd, offset, L_SET) == -1) {
+			PFerrno = PFE_UNIX;
+			return PFerrno;
 		}
-		PFerrno = PFE_PAGEFREE;
-		return(PFerrno);
+		if ((err = write(fd, (char *)&hdr.firstfree, sizeof(int))) != sizeof(int)) {
+			if (err < 0)
+				PFerrno = PFE_UNIX;
+			else
+				PFerrno = PFE_INCOMPLETEWRITE;
+			return PFerrno;
+		}
 	}
 
-	/* put this page into the free list */
-	fpage->nextfree = PFftab[fd].hdr.firstfree;
-	PFftab[fd].hdr.firstfree = pagenum;
-	PFftab[fd].hdrchanged = TRUE;
+	/* Update header to point to this page as the new firstfree */
+	hdr.firstfree = pagenum;
 
-	/* unfix this page */
-	return(PFbufUnfix(fd,pagenum,TRUE));
+    /* Write updated header to disk */
+    if (lseek(fd, 0, SEEK_SET) < 0) {
+        PFerrno = PFE_UNIX;
+        return PFerrno;
+    }
+    if ((numbytes = write(fd, (char *)&hdr, sizeof(PFhdr_str))) != sizeof(PFhdr_str)) {
+        PFerrno = PFE_HDRWRITE;
+        return PFerrno;
+    }
+
+    return PFE_OK;
 }
 
 PF_UnfixPage(fd,pagenum,dirty)
@@ -746,3 +757,12 @@ RETURN VALUE: none
 	else	fprintf(stderr,"\n");
 
 }
+
+
+int PFMarkDirty(int fd, int pagenum) {
+
+	return PFbufUsed(fd, pagenum);
+
+}
+
+

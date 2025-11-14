@@ -10,7 +10,56 @@ static PFbpage *PFfirstbpage= NULL;	/* ptr to first buffer page, or NULL */
 static PFbpage *PFlastbpage = NULL;	/* ptr to last buffer page, or NULL */
 static PFbpage *PFfreebpage= NULL;	/* list of free buffer pages */
 
+
+int PFStrategy = 0; // 0 = LRU, 1 = MRU
+
+//Statistics
+long PFLogicalIO = 0; // Logical I/O count
+long PFPhysicalIO = 0; // Physical I/O count
+
+
 extern char *malloc();
+
+
+static PFbpage *PFSelectVictim() {
+
+	PFbpage *victim = NULL;
+
+	// LRU
+	if (PFStrategy == 0) { 
+		
+		victim = PFlastbpage;
+
+		while (victim != NULL && victim->fixed) {
+			victim = victim->prevpage;
+		}
+
+	} 
+
+
+	// MRU
+	else {
+
+		victim = PFfirstbpage;
+
+		while (victim != NULL && victim->fixed) {
+			victim = victim->nextpage;
+		}
+
+	}
+
+
+	if (victim == NULL) {
+		// No available victim found
+		PFerrno = PFE_NOBUF;
+		return NULL;
+	}
+
+	return victim;
+
+
+}
+
 
 static void PFbufInsertFree(bpage)
 PFbpage *bpage;
@@ -132,6 +181,7 @@ int error;		/* error value returned*/
 		*bpage = PFfreebpage;
 		PFfreebpage = (*bpage)->nextpage;
 	}
+
 	else if (PFnumbpage < PF_MAX_BUFS){
 		/* We have not reached max buffer limit, so
 		malloc() a new one */
@@ -144,38 +194,36 @@ int error;		/* error value returned*/
 		/* increment # of pages allocated */
 		PFnumbpage++;
 	}
+
 	else {
 		/* we have reached max buffer limit */
 		/* choose a victim from the buffer*/
 
-		*bpage = NULL;		/* set initial return value */
+		*bpage = PFSelectVictim();		/* set initial return value */
 
-		for (tbpage=PFlastbpage;tbpage!=NULL;tbpage=tbpage->prevpage){
-			if (!tbpage->fixed)
-				/* found a page that can be swapped out */
-				break;
-		}
-
-		if (tbpage == NULL){
-			/* couldn't find a free page */
-			PFerrno = PFE_NOBUF;
+		if (*bpage == NULL){
+			// No victim found
 			return(PFerrno);
 		}
 
-		/* write out the dirty page */
-		if (tbpage->dirty&&((error=(*writefcn)(tbpage->fd,
-				tbpage->page,&tbpage->fpage))!= PFE_OK))
-			return(error);
-		tbpage->dirty = FALSE;
+		if ((*bpage)->dirty){
 
-		/* unlink from hash table */
-		if ((error=PFhashDelete(tbpage->fd,tbpage->page))!= PFE_OK)
-			return(error);
-		
-		/* unlink from buffer list */
-		PFbufUnlink(tbpage);
+			// write out the page
+			if ((error=(*writefcn)((*bpage)->fd, (*bpage)->page,&(*bpage)->fpage))!= PFE_OK){
+				/* error writing page */
+				return(error);
+			}
+			
+		}
 
-		*bpage = tbpage;
+		// Unlink the victim from the hash table
+		if ((error = PFhashDelete((*bpage)->fd, (*bpage)->page)) != PFE_OK) {
+			return error;
+		}
+
+		// Unlink the victim from the buffer list
+		PFbufUnlink(*bpage);
+
 
 	}
 
@@ -313,8 +361,16 @@ PFbpage *bpage;
 	/* unlink this page */
 	PFbufUnlink(bpage);
 
-	/* insert it as head of linked list to make it most recently used*/
-	PFbufLinkHead(bpage);
+	// Insert the page at the appropriate position
+	if (PFStrategy == 1) {
+		// MRU: Move to the head of the list
+		PFbufLinkHead(bpage);
+	} 
+	
+	else {
+		// LRU: Move to the tail of the list
+		PFbufLinkTail(bpage); // Implement PFbufLinkTail() if it doesn't exist
+	}
 
 	return(PFE_OK);
 }
@@ -432,6 +488,11 @@ int error;		/* error code */
 }
 
 
+
+
+
+
+
 PFbufUsed(fd,pagenum)
 int fd;		/* file descriptor */
 int pagenum;	/* page number */
@@ -483,9 +544,14 @@ AUTHOR: clc
 {
 PFbpage *bpage;
 
-	printf("buffer content:\n");
+	if (PFStrategy == 0) {
+		printf("Buffer content (Strategy: LRU):\n");
+	} else {
+		printf("Buffer content (Strategy: MRU):\n");
+	}
+
 	if (PFfirstbpage == NULL)
-		printf("empty\n");
+		printf("Empty\n");
 	else {
 		printf("fd\tpage\tfixed\tdirty\tfpage\n");
 		for(bpage = PFfirstbpage; bpage != NULL; bpage= bpage->nextpage)

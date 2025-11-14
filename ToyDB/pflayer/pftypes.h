@@ -83,10 +83,8 @@ extern PFbufalloc();
 extern PFbufReleaseFile();
 
 // MRU LRU Globals
-extern int PF_BUFFER_SIZE; 
-extern int PF_REPLACEMENT_STRATEGY; /* 0 = LRU, 1 = MRU */
-extern long PF_Logical_IO; /* Logical I/O count */
-extern long PF_Physical_IO; /* Physical I/O count */
+extern int PFStrategy; /* 0 = LRU, 1 = MRU */
+extern long PFLogicalIO; /* Logical I/O count */
+extern long PFPhysicalIO; /* Physical I/O count */
 
-/* === ADD THIS PROTOTYPE === */
 extern int PFMarkDirty(int fileDesc, int pageNum);
