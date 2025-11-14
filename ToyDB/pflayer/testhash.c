@@ -1,5 +1,8 @@
 /* testhash.c: tests the hash table functions */
 #include <stdio.h>
+#include <stdlib.h>
+#include <unistd.h>
+#include <string.h>
 #include "pf.h"
 
 main()

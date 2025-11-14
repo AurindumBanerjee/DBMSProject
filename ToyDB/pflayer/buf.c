@@ -4,6 +4,7 @@ PFbufPrint() */
 #include <stdio.h>
 #include <stdlib.h>
 #include <unistd.h>
+#include <string.h>
 #include "pf.h"
 #include "pftypes.h"
 
@@ -18,9 +19,6 @@ int PFStrategy = 0; // 0 = LRU, 1 = MRU
 //Statistics
 long PFLogicalIO = 0; // Logical I/O count
 long PFPhysicalIO = 0; // Physical I/O count
-
-extern char *malloc();
-
 
 static PFbpage *PFSelectVictim() {
 
@@ -156,7 +154,7 @@ GLOBAL VARIABLES MODIFIED:
 }
 
 
-static PFbufInternalAlloc(bpage,writefcn)
+static int PFbufInternalAlloc(bpage,writefcn)
 PFbpage **bpage;	/* pointer to pointer to buffer bpage to be allocated*/
 int (*writefcn)();
 /****************************************************************************
@@ -253,7 +251,7 @@ int error;		/* error value returned*/
 
 /************************* Interface to the Outside World ****************/
 
-PFbufGet(fd,pagenum,fpage,readfcn,writefcn)
+int PFbufGet(fd,pagenum,fpage,readfcn,writefcn)
 int fd;	/* file descriptor */
 int pagenum;	/* page number */
 PFfpage **fpage;	/* pointer to pointer to file page */
@@ -341,7 +339,7 @@ PFLogicalIO ++;
 	return(PFE_OK);
 }
 
-PFbufUnfix(fd,pagenum,dirty)
+int PFbufUnfix(fd,pagenum,dirty)
 int fd;		/* file descriptor */
 int pagenum;	/* page number */
 int dirty;	/* TRUE if page is dirty */
@@ -397,7 +395,7 @@ PFbpage *bpage;
 	return(PFE_OK);
 }
 
-PFbufAlloc(fd,pagenum,fpage,writefcn)
+int PFbufAlloc(fd,pagenum,fpage,writefcn)
 int fd;		/* file descriptor */
 int pagenum;	/* page number */
 PFfpage **fpage;	/* pointer to file page */
@@ -452,7 +450,7 @@ PFLogicalIO ++;
 }
 
 
-PFbufReleaseFile(fd,writefcn)
+int PFbufReleaseFile(fd,writefcn)
 int fd;		/* file descriptor */
 int (*writefcn)();	/* function to write a page of file */
 /****************************************************************************
