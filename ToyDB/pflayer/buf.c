@@ -2,9 +2,6 @@
 PFbufGet(), PFbufUnfix(), PFbufAlloc(), PFbufReleaseFile(), PFbufUsed() and
 PFbufPrint() */
 #include <stdio.h>
-#include <stdlib.h>
-#include <unistd.h>
-#include <string.h>
 #include "pf.h"
 #include "pftypes.h"
 
@@ -13,52 +10,7 @@ static PFbpage *PFfirstbpage= NULL;	/* ptr to first buffer page, or NULL */
 static PFbpage *PFlastbpage = NULL;	/* ptr to last buffer page, or NULL */
 static PFbpage *PFfreebpage= NULL;	/* list of free buffer pages */
 
-
-int PFStrategy = 0; // 0 = LRU, 1 = MRU
-
-//Statistics
-long PFLogicalIO = 0; // Logical I/O count
-long PFPhysicalIO = 0; // Physical I/O count
-
-static PFbpage *PFSelectVictim() {
-
-	PFbpage *victim = NULL;
-
-	// LRU
-	if (PFStrategy == 0) { 
-		
-		victim = PFlastbpage;
-
-		while (victim != NULL && victim->fixed) {
-			victim = victim->prevpage;
-		}
-
-	} 
-
-
-	// MRU
-	else {
-
-		victim = PFfirstbpage;
-
-		while (victim != NULL && victim->fixed) {
-			victim = victim->nextpage;
-		}
-
-	}
-
-
-	if (victim == NULL) {
-		// No available victim found
-		PFerrno = PFE_NOBUF;
-		return NULL;
-	}
-
-	return victim;
-
-
-}
-
+extern char *malloc();
 
 static void PFbufInsertFree(bpage)
 PFbpage *bpage;
@@ -101,21 +53,6 @@ GLOBAL VARIABLES MODIFIED:
 	if (PFlastbpage == NULL)
 		PFlastbpage = bpage;
 }
-
-
-static void PFbufLinkTail(PFbpage *bpage) {
-    bpage->nextpage = NULL;
-    bpage->prevpage = PFlastbpage;
-
-    if (PFlastbpage != NULL) {
-        PFlastbpage->nextpage = bpage;
-    }
-    PFlastbpage = bpage;
-
-    if (PFfirstbpage == NULL) {
-        PFfirstbpage = bpage;
-    }
-}
 	
 void PFbufUnlink(bpage)
 PFbpage *bpage;		/* buffer page to be unlinked from the used list */
@@ -154,7 +91,7 @@ GLOBAL VARIABLES MODIFIED:
 }
 
 
-static int PFbufInternalAlloc(bpage,writefcn)
+static PFbufInternalAlloc(bpage,writefcn)
 PFbpage **bpage;	/* pointer to pointer to buffer bpage to be allocated*/
 int (*writefcn)();
 /****************************************************************************
@@ -195,7 +132,6 @@ int error;		/* error value returned*/
 		*bpage = PFfreebpage;
 		PFfreebpage = (*bpage)->nextpage;
 	}
-
 	else if (PFnumbpage < PF_MAX_BUFS){
 		/* We have not reached max buffer limit, so
 		malloc() a new one */
@@ -208,38 +144,38 @@ int error;		/* error value returned*/
 		/* increment # of pages allocated */
 		PFnumbpage++;
 	}
-
 	else {
 		/* we have reached max buffer limit */
 		/* choose a victim from the buffer*/
 
-		*bpage = PFSelectVictim();		/* set initial return value */
+		*bpage = NULL;		/* set initial return value */
 
-		if (*bpage == NULL){
-			// No victim found
+		for (tbpage=PFlastbpage;tbpage!=NULL;tbpage=tbpage->prevpage){
+			if (!tbpage->fixed)
+				/* found a page that can be swapped out */
+				break;
+		}
+
+		if (tbpage == NULL){
+			/* couldn't find a free page */
+			PFerrno = PFE_NOBUF;
 			return(PFerrno);
 		}
 
-		if ((*bpage)->dirty){
+		/* write out the dirty page */
+		if (tbpage->dirty&&((error=(*writefcn)(tbpage->fd,
+				tbpage->page,&tbpage->fpage))!= PFE_OK))
+			return(error);
+		tbpage->dirty = FALSE;
 
-			// write out the page
-			if ((error=(*writefcn)((*bpage)->fd, (*bpage)->page,&(*bpage)->fpage))!= PFE_OK){
-				/* error writing page */
-				return(error);
-			}
+		/* unlink from hash table */
+		if ((error=PFhashDelete(tbpage->fd,tbpage->page))!= PFE_OK)
+			return(error);
+		
+		/* unlink from buffer list */
+		PFbufUnlink(tbpage);
 
-			DiskWrites ++;
-			
-		}
-
-		// Unlink the victim from the hash table
-		if ((error = PFhashDelete((*bpage)->fd, (*bpage)->page)) != PFE_OK) {
-			return error;
-		}
-
-		// Unlink the victim from the buffer list
-		PFbufUnlink(*bpage);
-
+		*bpage = tbpage;
 
 	}
 
@@ -251,7 +187,7 @@ int error;		/* error value returned*/
 
 /************************* Interface to the Outside World ****************/
 
-int PFbufGet(fd,pagenum,fpage,readfcn,writefcn)
+PFbufGet(fd,pagenum,fpage,readfcn,writefcn)
 int fd;	/* file descriptor */
 int pagenum;	/* page number */
 PFfpage **fpage;	/* pointer to pointer to file page */
@@ -287,8 +223,6 @@ GLOBAL VARIABLES MODIFIED:
 PFbpage *bpage;	/* pointer to buffer */
 int error;
 
-PFLogicalIO ++;
-
 	if ((bpage=PFhashFind(fd,pagenum)) == NULL){
 		/* page not in buffer. */
 		
@@ -308,8 +242,6 @@ PFLogicalIO ++;
 			*fpage = NULL;
 			return(error);
 		}
-
-		DiskReads ++;
 
 		/* insert new page into hash table */
 		if ((error=PFhashInsert(fd,pagenum,bpage))!=PFE_OK){
@@ -339,7 +271,7 @@ PFLogicalIO ++;
 	return(PFE_OK);
 }
 
-int PFbufUnfix(fd,pagenum,dirty)
+PFbufUnfix(fd,pagenum,dirty)
 int fd;		/* file descriptor */
 int pagenum;	/* page number */
 int dirty;	/* TRUE if page is dirty */
@@ -381,44 +313,13 @@ PFbpage *bpage;
 	/* unlink this page */
 	PFbufUnlink(bpage);
 
-	// Insert the page at the appropriate position
-	if (PFStrategy == 1) {
-		// MRU: Move to the head of the list
-		PFbufLinkHead(bpage);
-	} 
-	
-	else {
-		// LRU: Move to the tail of the list
-		PFbufLinkTail(bpage);
-	}
+	/* insert it as head of linked list to make it most recently used*/
+	PFbufLinkHead(bpage);
 
 	return(PFE_OK);
 }
 
-void PFbufInit() {
-    int i;
-
-    // Initialize the free buffer list
-    PFfreebpage = NULL;
-    for (i = 0; i < PF_MAX_BUFS; i++) {
-        PFbpage *bpage = (PFbpage *)malloc(sizeof(PFbpage));
-        if (bpage == NULL) {
-            fprintf(stderr, "PFbufInit: Out of memory\n");
-            exit(1);
-        }
-
-        // Add the page to the free list
-        bpage->nextpage = PFfreebpage;
-        PFfreebpage = bpage;
-    }
-
-    // Initialize the buffer pool
-    PFfirstbpage = NULL;
-    PFlastbpage = NULL;
-    PFnumbpage = 0;
-}
-
-int PFbufAlloc(fd,pagenum,fpage,writefcn)
+PFbufAlloc(fd,pagenum,fpage,writefcn)
 int fd;		/* file descriptor */
 int pagenum;	/* page number */
 PFfpage **fpage;	/* pointer to file page */
@@ -438,8 +339,6 @@ RETURN VALUE:
 {
 PFbpage *bpage;
 int error;
-
-PFLogicalIO ++;
 
 	*fpage = NULL;	/* initial value of fpage */
 
@@ -473,7 +372,7 @@ PFLogicalIO ++;
 }
 
 
-int PFbufReleaseFile(fd,writefcn)
+PFbufReleaseFile(fd,writefcn)
 int fd;		/* file descriptor */
 int (*writefcn)();	/* function to write a page of file */
 /****************************************************************************
@@ -507,11 +406,10 @@ int error;		/* error code */
 			}
 
 			/* write out dirty page */
-			if (bpage->dirty&&((error=(*writefcn)(fd,bpage->page, &bpage->fpage))!= PFE_OK))
+			if (bpage->dirty&&((error=(*writefcn)(fd,bpage->page,
+					&bpage->fpage))!= PFE_OK))
 				/* error writing file */
 				return(error);
-
-			DiskWrites ++;
 			bpage->dirty = FALSE;
 
 			/* get rid of it from the hash table */
@@ -534,12 +432,7 @@ int error;		/* error code */
 }
 
 
-
-
-
-
-
-int PFbufUsed(fd,pagenum)
+PFbufUsed(fd,pagenum)
 int fd;		/* file descriptor */
 int pagenum;	/* page number */
 /****************************************************************************
@@ -590,14 +483,9 @@ AUTHOR: clc
 {
 PFbpage *bpage;
 
-	if (PFStrategy == 0) {
-		printf("Buffer content (Strategy: LRU):\n");
-	} else {
-		printf("Buffer content (Strategy: MRU):\n");
-	}
-
+	printf("buffer content:\n");
 	if (PFfirstbpage == NULL)
-		printf("Empty\n");
+		printf("empty\n");
 	else {
 		printf("fd\tpage\tfixed\tdirty\tfpage\n");
 		for(bpage = PFfirstbpage; bpage != NULL; bpage= bpage->nextpage)

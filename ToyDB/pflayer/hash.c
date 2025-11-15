@@ -1,14 +1,13 @@
 /* hash.c: Functions to facilitate finding the buffer page given
 a file descriptor and a page number */
 #include <stdio.h>
-#include <stdlib.h>
-#include <unistd.h>
-#include <string.h>
 #include "pf.h"
 #include "pftypes.h"
 
 /* hash table */
 static PFhash_entry *PFhashtbl[PF_HASH_TBL_SIZE];
+
+extern char *malloc();
 
 void PFhashInit()
 /****************************************************************************
@@ -66,7 +65,7 @@ PFhash_entry *entry; /* ptr to entries to search */
 	return(NULL);
 }
 
-int PFhashInsert(fd,page,bpage)
+PFhashInsert(fd,page,bpage)
 int fd;		/* file descriptor */
 int page;	/* page number */
 PFbpage *bpage;	/* buffer address for this page */
@@ -119,7 +118,7 @@ PFhash_entry *entry; /* pointer to new entry */
 	return(PFE_OK);
 }
 
-int PFhashDelete(fd,page)
+PFhashDelete(fd,page)
 int fd;		/* file descriptor */
 int page;	/* page number */
 /****************************************************************************
@@ -167,7 +166,7 @@ PFhash_entry *entry;	/* entry to look for */
 }
 
 
-void PFhashPrint()
+PFhashPrint()
 /****************************************************************************
 SPECIFICATIONS:
 	Print the hash table entries.
@@ -187,7 +186,7 @@ PFhash_entry *entry;
 		else{
 			for (entry = PFhashtbl[i]; entry != NULL;
 					entry = entry->nextentry)
-				printf("\tfd: %d, page: %d %p\n",
+				printf("\tfd: %d, page: %d %d\n",
 					entry->fd, entry->page,entry->bpage);
 		}
 	}
