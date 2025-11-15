@@ -1,5 +1,11 @@
 /* pftypes.h: declarations for Paged File interface */
 
+#ifndef PFTYPES_H
+#define PFTYPES_H
+
+/* Include pf.h to get PF_Strategy and error codes */
+#include "pf.h" 
+
 /**************************** File Page Decls *********************/
 /* Each file contains a header, which is a integer pointing
 to the first free page, or -1 if no more free pages in the file.
@@ -31,10 +37,23 @@ typedef struct PFftab_ele {
 	int unixfd;	/* unix file descriptor*/
 	PFhdr_str hdr;	/* file header */
 	short hdrchanged; /* TRUE if file header has changed */
+    PF_Strategy strategy; /* Replacement strategy for this file (PF_LRU or PF_MRU) */
 } PFftab_ele;
 
+/*
+ * The PF File Table.
+ * This is defined in pf.c and made external here so that
+ * the buffer manager (buf.c) can access it to find the
+ * replacement strategy for a given file descriptor.
+ */
+extern PFftab_ele PFftab[PF_FTAB_SIZE];
+
+
 /************************** Buffer Page Decls *********************/
-#define PF_MAX_BUFS	20	/* max # of buffers */
+/*
+ * NOTE: PF_MAX_BUFS is no longer a compile-time constant.
+ * It is now a variable, set by PF_Init() and stored within buf.c
+ */
 
 /* buffer page decl */
 typedef struct PFbpage {
@@ -68,13 +87,49 @@ typedef struct PFhash_entry {
 
 /******************* Interface functions from Hash Table ****************/
 extern void PFhashInit();
-extern PFbpage *PFhashFind();
-extern PFhashInsert();
-extern PFhashDelete();
-extern PFhashPrint();
+extern PFbpage *PFhashFind(int fd, int page);
+extern int PFhashInsert(int fd, int page, PFbpage *bpage);
+extern int PFhashDelete(int fd, int page);
+extern void PFhashPrint();
 
 /****************** Interface functions from Buffer Manager *************/
-extern PFbufGet();
-extern PFbufUnfix();
-extern PFbufalloc();
-extern PFbufReleaseFile();
+/*
+ * These are the internal functions of the buffer manager,
+ * called by the PF layer.
+ */
+
+/* Initialize the buffer manager with a given size */
+extern void PFbufInit(int bufsize);
+
+/* Get a page from the buffer */
+extern int PFbufGet(int fd, int pagenum, PFfpage **fpage,
+                     int (*readfcn)(int, int, PFfpage*),
+                     int (*writefcn)(int, int, PFfpage*));
+
+/* Unfix a page from the buffer */
+extern int PFbufUnfix(int fd, int pagenum, int dirty);
+
+/* Allocate a new page in the buffer */
+extern int PFbufAlloc(int fd, int pagenum, PFfpage **fpage,
+                       int (*writefcn)(int, int, PFfpage*));
+
+/* Release all pages for a given file */
+extern int PFbufReleaseFile(int fd, int (*writefcn)(int, int, PFfpage*));
+
+/* Mark a page as used (and dirty) */
+extern int PFbufUsed(int fd, int pagenum);
+
+/* Explicitly mark a fixed page as dirty */
+extern int PFbufMarkDirty(int fd, int pagenum);
+
+/* Print buffer contents (for debugging) */
+extern void PFbufPrint();
+
+/* Statistics functions */
+extern void PFbufResetStats();
+extern long PFbufGetLogicalIOs();
+extern long PFbufGetPhysicalIOs();
+extern long PFbufGetDiskReads();
+extern long PFbufGetDiskWrites();
+
+#endif /* PFTYPES_H */

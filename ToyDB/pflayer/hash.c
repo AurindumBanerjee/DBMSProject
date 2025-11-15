@@ -1,13 +1,14 @@
 /* hash.c: Functions to facilitate finding the buffer page given
 a file descriptor and a page number */
 #include <stdio.h>
+#include <stdlib.h> /* For malloc() and free() */
 #include "pf.h"
 #include "pftypes.h"
 
 /* hash table */
 static PFhash_entry *PFhashtbl[PF_HASH_TBL_SIZE];
 
-extern char *malloc();
+/* extern char *malloc(); --- This is obsolete, replaced by <stdlib.h> */
 
 void PFhashInit()
 /****************************************************************************
@@ -30,9 +31,7 @@ int i;
 }
 
 
-PFbpage *PFhashFind(fd,page)
-int fd;		/* file descriptor */
-int page;	/* page number */
+PFbpage *PFhashFind(int fd, int page)
 /****************************************************************************
 SPECIFICATIONS:
 	Given the file descriptor "fd", and page number "page",
@@ -65,10 +64,7 @@ PFhash_entry *entry; /* ptr to entries to search */
 	return(NULL);
 }
 
-PFhashInsert(fd,page,bpage)
-int fd;		/* file descriptor */
-int page;	/* page number */
-PFbpage *bpage;	/* buffer address for this page */
+int PFhashInsert(int fd, int page, PFbpage *bpage)
 /*****************************************************************************
 SPECIFICATIONS:
 	Insert the file descriptor "fd", page number "page", and the
@@ -118,9 +114,7 @@ PFhash_entry *entry; /* pointer to new entry */
 	return(PFE_OK);
 }
 
-PFhashDelete(fd,page)
-int fd;		/* file descriptor */
-int page;	/* page number */
+int PFhashDelete(int fd, int page)
 /****************************************************************************
 SPECIFICATIONS:
 	Delete the entry whose file descriptor is "fd", and whose page number
@@ -166,7 +160,7 @@ PFhash_entry *entry;	/* entry to look for */
 }
 
 
-PFhashPrint()
+void PFhashPrint()
 /****************************************************************************
 SPECIFICATIONS:
 	Print the hash table entries.
@@ -186,8 +180,9 @@ PFhash_entry *entry;
 		else{
 			for (entry = PFhashtbl[i]; entry != NULL;
 					entry = entry->nextentry)
-				printf("\tfd: %d, page: %d %d\n",
-					entry->fd, entry->page,entry->bpage);
+				/* Use %p to print the pointer address of bpage */
+				printf("\tfd: %d, page: %d, bpage: %p\n",
+					entry->fd, entry->page, (void*)entry->bpage);
 		}
 	}
 }

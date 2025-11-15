@@ -1,7 +1,9 @@
 /*
- * testpf.c
+ * testpf_seq.c
  *
- * This program is designed to test the PF buffer manager (Objective 1).
+ * This program tests the PF buffer manager with a SEQUENTIAL workload
+ * to demonstrate the difference between LRU and MRU.
+ *
  * It runs a mixed read/write workload based on environment variables
  * and prints statistics in a format parsable by graphTest.py.
  */
@@ -12,11 +14,12 @@
 #include "pf.h"
 
 /* --- Test Configuration --- */
-#define TEST_FILENAME "pf_testfile"
+#define TEST_FILENAME "pf_testfile_seq"
 #define BUFFER_SIZE 20   /* The buffer pool size to initialize */
 #define NUM_PAGES 50     /* File size (must be > BUFFER_SIZE to test eviction) */
 #define WORKLOAD_SIZE 5000 /* Total number of read/write operations */
-#define Strategy PF_MRU /*PF_MRU to test MRU strategy | PF_LRU to test LRU strategy */
+#define STRATEGY PF_MRU /* PF_LRU or PF_MRU */
+
 
 /*
  * Helper function to check PF errors and exit
@@ -39,17 +42,14 @@ int main(int argc, char **argv)
     int i, pagenum, ratio;
     char *buf;
     char *str_read, *str_write;
-    int read_ratio, write_ratio;
+    int read_ratio;
 
-    /* Initialize random seed */
+    /* Initialize random seed (for read/write mix) */
     srand(time(NULL));
 
     /* --- 1. Get Ratios from Environment --- */
     str_read = getenv("READ_RATIO");
     str_write = getenv("WRITE_RATIO");
-
-	// str_read = "80";  // For testing purposes, set to 80% reads
-	// str_write = "20"; // For testing purposes, set to 20% writes
 
     if (str_read == NULL || str_write == NULL)
     {
@@ -58,37 +58,28 @@ int main(int argc, char **argv)
     }
 
     read_ratio = atoi(str_read);
-    write_ratio = atoi(str_write); 
 
     /* --- 2. Initialize PF Layer & Create Test File --- */
     PF_Init(BUFFER_SIZE);
     check_error(PF_CreateFile(TEST_FILENAME), "PF_CreateFile");
 
-    /* Open with LRU strategy. Change this to PF_MRU to test the other strategy. */
-    fd = PF_OpenFile(TEST_FILENAME, Strategy);
+    fd = PF_OpenFile(TEST_FILENAME, STRATEGY);
     if (fd < 0) check_error(fd, "PF_OpenFile");
 
     /* --- 3. Prime the File with Data --- */
-    /* We allocate NUM_PAGES and write to them to create the file on disk. */
     for (i = 0; i < NUM_PAGES; i++)
     {
         check_error(PF_AllocPage(fd, &pagenum, &buf), "PF_AllocPage (prime)");
-        
-        /* Write some dummy data */
         sprintf(buf, "This is page %d", pagenum);
-        
-        /* Unfix the page, marking it dirty */
         check_error(PF_UnfixPage(fd, pagenum, TRUE), "PF_UnfixPage (prime)");
     }
-    
-    /* Close the file to flush all pages from buffer */
     check_error(PF_CloseFile(fd), "PF_CloseFile (prime)");
 
 
     /* --- 4. Run the Workload --- */
     
     /* Re-open the file. The buffer is now empty. */
-    fd = PF_OpenFile(TEST_FILENAME, Strategy);
+    fd = PF_OpenFile(TEST_FILENAME, STRATEGY);
     if (fd < 0) check_error(fd, "PF_OpenFile (test)");
 
     /* Reset statistics counters to zero */
@@ -96,8 +87,12 @@ int main(int argc, char **argv)
 
     for (i = 0; i < WORKLOAD_SIZE; i++)
     {
-        /* Pick a random page to access */
-        pagenum = rand() % NUM_PAGES;
+        /*
+         * **********************************************************
+         * KEY CHANGE: Access pages sequentially (0, 1, ... 49, 0, ...)
+         * **********************************************************
+         */
+        pagenum = i % NUM_PAGES;
         
         /* Decide whether to read or write */
         ratio = rand() % 100;
@@ -106,18 +101,13 @@ int main(int argc, char **argv)
         {
             /* --- Read Operation --- */
             check_error(PF_GetThisPage(fd, pagenum, &buf), "PF_GetThisPage (read)");
-            /* (We could read from buf here) */
             check_error(PF_UnfixPage(fd, pagenum, FALSE), "PF_UnfixPage (read)");
         }
         else
         {
             /* --- Write Operation --- */
             check_error(PF_GetThisPage(fd, pagenum, &buf), "PF_GetThisPage (write)");
-            
-            /* Write some new data */
             sprintf(buf, "Written at step %d", i);
-
-            /* Unfix the page, marking it dirty */
             check_error(PF_UnfixPage(fd, pagenum, TRUE), "PF_UnfixPage (write)");
         }
     }
@@ -125,9 +115,7 @@ int main(int argc, char **argv)
     /* --- 5. Clean Up and Report Stats --- */
     check_error(PF_CloseFile(fd), "PF_CloseFile (test)");
 
-    /*
-     * Print statistics in the EXACT format required by graphTest.py
-     */
+    /* Print statistics in the EXACT format required by graphTest.py */
     printf("Logical I/Os: %ld\n", PF_GetLogicalIOs());
     printf("Physical I/Os: %ld\n", PF_GetPhysicalIOs());
     printf("Disk Reads: %ld\n", PF_GetDiskReads());

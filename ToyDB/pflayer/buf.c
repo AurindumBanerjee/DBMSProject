@@ -1,24 +1,34 @@
 /* buf.c: buffer management routines. The interface routines are:
 PFbufGet(), PFbufUnfix(), PFbufAlloc(), PFbufReleaseFile(), PFbufUsed() and
 PFbufPrint() */
+
 #include <stdio.h>
+#include <stdlib.h> /* For malloc */
 #include "pf.h"
 #include "pftypes.h"
 
+/* Global static variables for the buffer manager */
 static int PFnumbpage = 0;	/* # of buffer pages in memory */
-static PFbpage *PFfirstbpage= NULL;	/* ptr to first buffer page, or NULL */
-static PFbpage *PFlastbpage = NULL;	/* ptr to last buffer page, or NULL */
+static int PF_MAX_BUFS;     /* Max # of buffers, set by PFbufInit */
+
+static PFbpage *PFfirstbpage= NULL;	/* ptr to first buffer page (MRU), or NULL */
+static PFbpage *PFlastbpage = NULL;	/* ptr to last buffer page (LRU), or NULL */
 static PFbpage *PFfreebpage= NULL;	/* list of free buffer pages */
 
-extern char *malloc();
+/* Statistics Counters */
+static long PF_logical_ios = 0;
+static long PF_physical_ios = 0;
+static long PF_disk_reads = 0;
+static long PF_disk_writes = 0;
 
-static void PFbufInsertFree(bpage)
-PFbpage *bpage;
+/****************************************************************************
+ * Internal Buffer List Management Routines
+ ****************************************************************************/
+
+static void PFbufInsertFree(PFbpage *bpage)
 /****************************************************************************
 SPECIFICATIONS:
 	Insert the buffer page pointed by "bpage" into the free list.
-
-AUTHOR: clc
 *****************************************************************************/
 {
 	bpage->nextpage = PFfreebpage;
@@ -26,25 +36,13 @@ AUTHOR: clc
 }
 
 
-static void PFbufLinkHead(bpage)
-PFbpage *bpage;		/* pointer to buffer page to be linked */
+static void PFbufLinkHead(PFbpage *bpage)
 /****************************************************************************
 SPECIFICATIONS:
-
-	Link the buffer page pointed by "bpage" as the head
+	Link the buffer page pointed by "bpage" as the head (MRU)
 	of the used buffer list. No other field of bpage is modified.
-
-AUTHOR: clc
-
-RETURN VALUE:
-	none.
-
-GLOBAL VARIABLES MODIFIED:
-	PFfirstbpage, PFlastbpage.
-
 *****************************************************************************/
 {
-
 	bpage->nextpage = PFfirstbpage;
 	bpage->prevpage = NULL;
 	if (PFfirstbpage != NULL)
@@ -53,9 +51,29 @@ GLOBAL VARIABLES MODIFIED:
 	if (PFlastbpage == NULL)
 		PFlastbpage = bpage;
 }
+
+/*
+ * *******************************************************************
+ * NEW FUNCTION TO LINK A PAGE AT THE TAIL (LRU POSITION)
+ * *******************************************************************
+ */
+static void PFbufLinkTail(PFbpage *bpage)
+/****************************************************************************
+SPECIFICATIONS:
+	Link the buffer page pointed by "bpage" as the tail (LRU)
+	of the used buffer list.
+*****************************************************************************/
+{
+    bpage->nextpage = NULL;
+    bpage->prevpage = PFlastbpage;
+    if (PFlastbpage != NULL)
+        PFlastbpage->nextpage = bpage;
+    PFlastbpage = bpage;
+    if (PFfirstbpage == NULL)
+        PFfirstbpage = bpage;
+}
 	
-void PFbufUnlink(bpage)
-PFbpage *bpage;		/* buffer page to be unlinked from the used list */
+void PFbufUnlink(PFbpage *bpage)
 /****************************************************************************
 SPECIFICATIONS:
 	Unlink the page pointed by bpage from the buffer list. Assume
@@ -63,17 +81,8 @@ SPECIFICATIONS:
 	fields to NULL. The caller is responsible to either place
 	the unlinked page into the free list, or insert it back
 	into the used list.
-
-AUTHOR: clc
-
-RETURN VALUE:
-	none
-
-GLOBAL VARIABLES MODIFIED:
-	PFfirstbpage,PFlastbpage.
 *****************************************************************************/
 {
-
 	if (PFfirstbpage == bpage)
 		PFfirstbpage = bpage->nextpage;
 	
@@ -87,44 +96,27 @@ GLOBAL VARIABLES MODIFIED:
 		bpage->prevpage->nextpage = bpage->nextpage;
 
 	bpage->prevpage = bpage->nextpage = NULL;
-
 }
 
 
-static PFbufInternalAlloc(bpage,writefcn)
-PFbpage **bpage;	/* pointer to pointer to buffer bpage to be allocated*/
-int (*writefcn)();
+static int PFbufInternalAlloc(PFbpage **bpage, int (*writefcn)(int, int, PFfpage*), int fd)
 /****************************************************************************
 SPECIFICATIONS:
 	Allocate a buffer page and set *bpage to point to it. *bpage
 	is set to NULL if one can not be allocated.
-	The "nextpage" and "prevpage" fields of *bpage are linked as
-	the head of the list of used buffers.All the other fields are undefined.
-	writefcn() is used to write pages. (See PFbufGet()).
+	writefcn() is used to write pages.
+    fd is the file descriptor for the *new* page, used to determine
+    the replacement strategy for eviction.
 
 ALGORITHM:
-	If there is something on the free list, then use it.
-	If free list is empty, and there are less than PF_MAX_BUFS 
-	number of pages allocated, then malloc() one.
-	Otherwise, choose a victim to write out, and then use that
-	page as the page to be used.
-	If a victim cannot be chosen (because all the pages are fixed),
-	then return error.
-
-AUTHOR: clc
-
-RETURN VALUE:
-
-	PFE_OK	if no error.
-	PF_NOMEM	if no memory.
-	PF_NOBUF	if no buffer space left because all pages are fixed.
-
-GLOBAL VARIABLES MODIFIED:
-	PFnumbpage, PFfirstbpage, PFlastbpage, PFfreebpage
+    **VICTIM SELECTION (Objective 1):**
+    - If strategy for `fd` is PF_LRU, finds victim from tail (PFlastbpage).
+    - If strategy for `fd` is PF_MRU, finds victim from head (PFfirstbpage).
 *****************************************************************************/
 {
-PFbpage *tbpage;	/* temporary pointer to buffer page */
-int error;		/* error value returned*/
+    PFbpage *tbpage;	/* temporary pointer to buffer page */
+    int error;		/* error value returned*/
+    PF_Strategy strategy; /* Replacement strategy */
 
 	/* Set *bpage to the buffer page to be returned */
 	if (PFfreebpage != NULL){
@@ -146,26 +138,47 @@ int error;		/* error value returned*/
 	}
 	else {
 		/* we have reached max buffer limit */
-		/* choose a victim from the buffer*/
+		/* choose a victim from the buffer based on strategy */
 
 		*bpage = NULL;		/* set initial return value */
+        
+        /* Look up the strategy for the file requesting the page */
+        strategy = PFftab[fd].strategy;
 
-		for (tbpage=PFlastbpage;tbpage!=NULL;tbpage=tbpage->prevpage){
-			if (!tbpage->fixed)
-				/* found a page that can be swapped out */
-				break;
-		}
+        if (strategy == PF_LRU)
+        {
+            /* LRU: Scan from the tail (Least Recently Used) backwards */
+            for (tbpage = PFlastbpage; tbpage != NULL; tbpage = tbpage->prevpage){
+                if (!tbpage->fixed)
+                    /* found a page that can be swapped out */
+                    break;
+            }
+        }
+        else /* strategy == PF_MRU */
+        {
+            /* MRU: Scan from the head (Most Recently Used) forwards */
+            for (tbpage = PFfirstbpage; tbpage != NULL; tbpage = tbpage->nextpage){
+                if (!tbpage->fixed)
+                    /* found a page that can be swapped out */
+                    break;
+            }
+        }
 
 		if (tbpage == NULL){
-			/* couldn't find a free page */
+			/* couldn't find an un-fixed page */
 			PFerrno = PFE_NOBUF;
 			return(PFerrno);
 		}
 
 		/* write out the dirty page */
-		if (tbpage->dirty&&((error=(*writefcn)(tbpage->fd,
-				tbpage->page,&tbpage->fpage))!= PFE_OK))
-			return(error);
+		if (tbpage->dirty) {
+            if((error=(*writefcn)(tbpage->fd, tbpage->page, &tbpage->fpage)) != PFE_OK)
+			    return(error);
+            
+            /* Increment Write Statistics */
+            PF_disk_writes++;
+            PF_physical_ios++;
+        }
 		tbpage->dirty = FALSE;
 
 		/* unlink from hash table */
@@ -176,10 +189,20 @@ int error;		/* error value returned*/
 		PFbufUnlink(tbpage);
 
 		*bpage = tbpage;
-
 	}
 
-	/* Link the page as the head of the used list */
+    /*
+     * *******************************************************************
+     * MODIFICATION: Link new page at HEAD for LRU, TAIL for MRU
+     * When a new page is brought in:
+     * - For LRU, it's the "newest" (MRU), so link at head.
+     * - For MRU, it's the "newest" (MRU), but we also want to protect
+     * older pages. For a sequential scan, linking at the tail
+     * is also fine, but linking at the head is the standard
+     * "new page" behavior. We will link at the head here, and
+     * make the main change in PFbufUnfix.
+     * *******************************************************************
+     */
 	PFbufLinkHead(*bpage);
 	return(PFE_OK);
 }
@@ -187,66 +210,59 @@ int error;		/* error value returned*/
 
 /************************* Interface to the Outside World ****************/
 
-PFbufGet(fd,pagenum,fpage,readfcn,writefcn)
-int fd;	/* file descriptor */
-int pagenum;	/* page number */
-PFfpage **fpage;	/* pointer to pointer to file page */
-int (*readfcn)();	/* function to read a page */
-int (*writefcn)();	/* function to write a page */
+void PFbufInit(int bufsize)
+/****************************************************************************
+SPECIFICATIONS:
+	Initialize the buffer manager.
+*****************************************************************************/
+{
+    PF_MAX_BUFS = bufsize;
+    PFnumbpage = 0;
+	PFfirstbpage= NULL;
+	PFlastbpage = NULL;
+	PFfreebpage= NULL;
+    PFbufResetStats();
+}
+
+
+int PFbufGet(int fd, int pagenum, PFfpage **fpage,
+             int (*readfcn)(int, int, PFfpage*),
+             int (*writefcn)(int, int, PFfpage*))
 /****************************************************************************
 SPECIFICATIONS:
 	Get a page whose number is "pagenum" from the file pointed
 	by "fd". Set *fpage to point to the data for that page.
-	This function requires two functions:
-		readfcn(fd,pagenum,fpage) 
-		int fd;
-		int pagenum;
-		PFfpage *fpage;
-	which will read one page whose number is "pagenum" from the file "fd"
-	into the buffer area pointed by "fpage".
-		writefcn(fd,pagenum,fpage)
-		int fd;
-		in pagenum;
-		PFpage *fpage;
-	which will write one page into the file.
-	It is an error to read a page already fixed in the buffer.
-
-RETURN VALUE:
-	PFE_OK	if no error.
-	PF error code if error.
-	If error code is PFE_PAGEFIXED, *fpage is still set to point to the buffer
-	page of the page in memory.
-
-GLOBAL VARIABLES MODIFIED:
 *****************************************************************************/
 {
-PFbpage *bpage;	/* pointer to buffer */
-int error;
+    PFbpage *bpage;	/* pointer to buffer */
+    int error;
+
+    /* A request for a page is one logical I/O */
+    PF_logical_ios++;
 
 	if ((bpage=PFhashFind(fd,pagenum)) == NULL){
 		/* page not in buffer. */
 		
 		/* allocate an empty page */
-		if ((error=PFbufInternalAlloc(&bpage,writefcn))!= PFE_OK){
-			/* error */
+		if ((error=PFbufInternalAlloc(&bpage, writefcn, fd))!= PFE_OK){
 			*fpage = NULL;
 			return(error);
 		}
 		
-		/* read the page */
-		if ((error=(*readfcn)(fd,pagenum,&bpage->fpage))!= PFE_OK){
-			/* error reading the page. put buffer back into 
-			the free list, and return gracefully */
+		/* read the page from disk */
+		if ((error=(*readfcn)(fd, pagenum, &bpage->fpage))!= PFE_OK){
 			PFbufUnlink(bpage);
 			PFbufInsertFree(bpage);
 			*fpage = NULL;
 			return(error);
 		}
 
+        /* Increment Read Statistics (this was a page miss) */
+        PF_disk_reads++;
+        PF_physical_ios++;
+
 		/* insert new page into hash table */
 		if ((error=PFhashInsert(fd,pagenum,bpage))!=PFE_OK){
-			/* failed to insert into hash table */
-			/* put page into free list */
 			PFbufUnlink(bpage);
 			PFbufInsertFree(bpage);
 			return(error);
@@ -258,12 +274,24 @@ int error;
 		bpage->dirty = FALSE;
 	}
 	else if (bpage->fixed){
-		/* page already in memory, and is fixed, so we can't
-		get it again. */
+		/* page already in memory, and is fixed */
 		*fpage = &bpage->fpage;
 		PFerrno = PFE_PAGEFIXED;
 		return(PFerrno);
 	}
+
+    /*
+     * *******************************************************************
+     * MODIFICATION: On a buffer HIT, we must also re-link the page
+     * according to the strategy.
+     * *******************************************************************
+     */
+    PFbufUnlink(bpage);
+    if (PFftab[fd].strategy == PF_LRU) {
+        PFbufLinkHead(bpage);
+    } else {
+        PFbufLinkTail(bpage); /* For MRU, move to tail to protect it */
+    }
 
 	/* Fix the page in the buffer then return*/
 	bpage->fixed = TRUE;
@@ -271,25 +299,14 @@ int error;
 	return(PFE_OK);
 }
 
-PFbufUnfix(fd,pagenum,dirty)
-int fd;		/* file descriptor */
-int pagenum;	/* page number */
-int dirty;	/* TRUE if page is dirty */
+int PFbufUnfix(int fd, int pagenum, int dirty)
 /****************************************************************************
 SPECIFICATIONS:
 	Unfix the file page whose number is "pagenum" from the buffer.
-	If dirty is TRUE, then mark the buffer as having been modified.
-	Otherwise, the dirty flag is left unchanged.
-
-AUTHOR: clc
-
-RETURN VALUE:
-	PFE_OK if no error.
-	PF error codes if error occurs.
-
 *****************************************************************************/
 {
-PFbpage *bpage;
+    PFbpage *bpage;
+    PF_Strategy strategy;
 
 	if ((bpage= PFhashFind(fd,pagenum))==NULL){
 		/* page not in buffer */
@@ -310,35 +327,41 @@ PFbpage *bpage;
 	/* unfix the page */
 	bpage->fixed = FALSE;
 	
-	/* unlink this page */
+    /*
+     * *******************************************************************
+     * MODIFICATION: Relink the page based on the strategy
+     * - For LRU, unfixing moves it to the HEAD (it's now MRU).
+     * - For MRU, unfixing moves it to the TAIL (it's now LRU,
+     * so it is protected from eviction).
+     * *******************************************************************
+     */
+	
+    /* Get the strategy for this file */
+    strategy = PFftab[fd].strategy;
+    
+    /* unlink this page */
 	PFbufUnlink(bpage);
 
-	/* insert it as head of linked list to make it most recently used*/
-	PFbufLinkHead(bpage);
+    if (strategy == PF_LRU) {
+	    /* insert it as head of linked list to make it most recently used*/
+	    PFbufLinkHead(bpage);
+    } else { /* strategy == PF_MRU */
+        /* insert it as tail of linked list to make it least recently used*/
+        PFbufLinkTail(bpage);
+    }
 
 	return(PFE_OK);
 }
 
-PFbufAlloc(fd,pagenum,fpage,writefcn)
-int fd;		/* file descriptor */
-int pagenum;	/* page number */
-PFfpage **fpage;	/* pointer to file page */
-int (*writefcn)();
+int PFbufAlloc(int fd, int pagenum, PFfpage **fpage, int (*writefcn)(int, int, PFfpage*))
 /****************************************************************************
 SPECIFICATIONS:
 	Allocate a buffer and mark it belonging to page "pagenum"
 	of file "fd".  Set *fpage to point to the buffer data.
-	The function "writefcn" is used to write out pages. (See PFbufGet()).
-
-AUTHOR: clc
-
-RETURN VALUE:
-	PFE_OK if successful.
-	PF error codes if unsuccessful
 *****************************************************************************/
 {
-PFbpage *bpage;
-int error;
+    PFbpage *bpage;
+    int error;
 
 	*fpage = NULL;	/* initial value of fpage */
 
@@ -348,14 +371,13 @@ int error;
 		return(PFerrno);
 	}
 
-	if ((error=PFbufInternalAlloc(&bpage,writefcn))!= PFE_OK)
+	if ((error=PFbufInternalAlloc(&bpage, writefcn, fd))!= PFE_OK)
 		/* can't get any buffer */
 		return(error);
 	
 	/* put ourselves into the hash table */
 	if ((error=PFhashInsert(fd,pagenum,bpage))!= PFE_OK){
 		/* can't insert into the hash table */
-		/* unlink bpage, and put it into the free list */
 		PFbufUnlink(bpage);
 		PFbufInsertFree(bpage);
 		return(error);
@@ -372,28 +394,16 @@ int error;
 }
 
 
-PFbufReleaseFile(fd,writefcn)
-int fd;		/* file descriptor */
-int (*writefcn)();	/* function to write a page of file */
+int PFbufReleaseFile(int fd, int (*writefcn)(int, int, PFfpage*))
 /****************************************************************************
 SPECIFICATIONS:
 	Release all pages of file "fd" from the buffer and
 	put them into the free list 
-
-AUTHOR: clc
-
-RETURN VALUE:
-	PFE_OK if no error.
-	PF error code if error.
-
-IMPLEMENTATION NOTES:
-	A linear search of the buffer is performed.
-	A better method is not needed because # of buffers are small.
 *****************************************************************************/
 {
-PFbpage *bpage;	/* ptr to buffer pages to search */
-PFbpage *temppage;
-int error;		/* error code */
+    PFbpage *bpage;	/* ptr to buffer pages to search */
+    PFbpage *temppage;
+    int error;		/* error code */
 
 	/* Do linear scan of the buffer to find pages belonging to the file */
 	bpage = PFfirstbpage;
@@ -406,10 +416,14 @@ int error;		/* error code */
 			}
 
 			/* write out dirty page */
-			if (bpage->dirty&&((error=(*writefcn)(fd,bpage->page,
-					&bpage->fpage))!= PFE_OK))
-				/* error writing file */
-				return(error);
+			if (bpage->dirty) {
+                if((error=(*writefcn)(fd,bpage->page, &bpage->fpage))!= PFE_OK)
+				    return(error);
+
+                /* Increment Write Statistics */
+                PF_disk_writes++;
+                PF_physical_ios++;
+            }
 			bpage->dirty = FALSE;
 
 			/* get rid of it from the hash table */
@@ -432,22 +446,14 @@ int error;		/* error code */
 }
 
 
-PFbufUsed(fd,pagenum)
-int fd;		/* file descriptor */
-int pagenum;	/* page number */
+int PFbufUsed(int fd, int pagenum)
 /****************************************************************************
 SPECIFICATIONS:
 	Mark page numbered "pagenum" of file descriptor "fd" as used.
-	The page must be fixed in the buffer. Make this page most
-	recently used.
-
-AUTHOR: clc
-
-RETURN VALUE: PF error codes.
-
+	The page must be fixed in the buffer.
 *****************************************************************************/
 {
-PFbpage *bpage;	/* pointer to the bpage we are looking for */
+    PFbpage *bpage;	/* pointer to the bpage we are looking for */
 
 	/* Find page in the buffer */
 	if ((bpage=PFhashFind(fd,pagenum))==NULL){
@@ -465,32 +471,99 @@ PFbpage *bpage;	/* pointer to the bpage we are looking for */
 	/* mark this page dirty */
 	bpage->dirty = TRUE;
 
-	/* make this page head of the list of buffers*/
+    /*
+     * *******************************************************************
+     * MODIFICATION: Relink the page based on the strategy
+     * This function is called by PF_AllocPage, which is a "new" page.
+     * *******************************************************************
+     */
 	PFbufUnlink(bpage);
-	PFbufLinkHead(bpage);
+    if (PFftab[fd].strategy == PF_LRU) {
+	    PFbufLinkHead(bpage);
+    } else {
+        PFbufLinkTail(bpage);
+    }
 
 	return(PFE_OK);
 }
+
+int PFbufMarkDirty(int fd, int pagenum)
+/****************************************************************************
+SPECIFICATIONS:
+	Explicitly mark a fixed page as dirty.
+*****************************************************************************/
+{
+    PFbpage *bpage;
+
+    /* Find page in the buffer */
+	if ((bpage=PFhashFind(fd,pagenum))==NULL){
+		/* page not in the buffer */
+		PFerrno = PFE_PAGENOTINBUF;
+		return(PFerrno);
+	}
+
+    /* Page must be fixed to be marked dirty */
+	if (!(bpage->fixed)){
+		/* page not fixed */
+		PFerrno = PFE_PAGEUNFIXED;
+		return(PFerrno);
+	}
+
+    /* Mark dirty */
+    bpage->dirty = TRUE;
+    return(PFE_OK);
+}
+
 
 void PFbufPrint()
 /****************************************************************************
 SPECIFICATIONS:
 	Print the current page buffers.
-
-AUTHOR: clc
-
 *****************************************************************************/
 {
-PFbpage *bpage;
+    PFbpage *bpage;
 
 	printf("buffer content:\n");
 	if (PFfirstbpage == NULL)
 		printf("empty\n");
 	else {
-		printf("fd\tpage\tfixed\tdirty\tfpage\n");
+		printf("fd\tpage\tfixed\tdirty\taddr\n");
 		for(bpage = PFfirstbpage; bpage != NULL; bpage= bpage->nextpage)
-			printf("%d\t%d\t%d\t%d\t%d\n",
+			printf("%d\t%d\t%d\t%d\t%p\n",
 				bpage->fd,bpage->page,(int)bpage->fixed,
-				(int)bpage->dirty,(int)&bpage->fpage);
+				(int)bpage->dirty, (void*)&bpage->fpage);
 	}
+}
+
+
+/****************************************************************************
+ * Statistics Interface Functions
+ ****************************************************************************/
+
+void PFbufResetStats()
+{
+    PF_logical_ios = 0;
+    PF_physical_ios = 0;
+    PF_disk_reads = 0;
+    PF_disk_writes = 0;
+}
+
+long PFbufGetLogicalIOs()
+{
+    return PF_logical_ios;
+}
+
+long PFbufGetPhysicalIOs()
+{
+    return PF_physical_ios;
+}
+
+long PFbufGetDiskReads()
+{
+    return PF_disk_reads;
+}
+
+long PFbufGetDiskWrites()
+{
+    return PF_disk_writes;
 }

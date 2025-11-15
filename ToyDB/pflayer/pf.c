@@ -1,8 +1,10 @@
 /* pf.c: Paged File Interface Routines+ support routines */
 #include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
 #include <sys/types.h>
 #include <fcntl.h>
-#include <sys/file.h>
+#include <unistd.h> /* For lseek, read, write, close, unlink */
 #include "pf.h"
 #include "pftypes.h"
 
@@ -13,7 +15,8 @@
 
 int PFerrno = PFE_OK;	/* last error message */
 
-static PFftab_ele PFftab[PF_FTAB_SIZE]; /* table of opened files */
+/* table of opened files - NOT static, so buf.c can see it */
+PFftab_ele PFftab[PF_FTAB_SIZE]; 
 
 /* true if file descriptor fd is invaild */
 #define PFinvalidFd(fd) ((fd) < 0 || (fd) >= PF_FTAB_SIZE \
@@ -24,40 +27,30 @@ sense that it's <0 or >= # of pages in the file */
 #define PFinvalidPagenum(fd,pagenum) ((pagenum)<0 || (pagenum) >= \
 				PFftab[fd].hdr.numpages)
 
-extern char *malloc();
 
 /****************** Internal Support Functions *****************************/
-static char *savestr(str)
-char *str;		/* string to be saved */
+static char *savestr(const char *str)
 /****************************************************************************
 SPECIFICATIONS:
 	Allocate memory and save string pointed by str.
 	Return a pointer to the saved string, or NULL if no memory.
 *****************************************************************************/
 {
-char *s;
+    char *s;
 
 	if ((s=malloc(strlen(str)+1))!= NULL)
 		strcpy(s,str);
 	return(s);
 }
 
-static PFtabFindFname(fname)
-char *fname;		/* file name to find */
+static int PFtabFindFname(char *fname)
 /****************************************************************************
 SPECIFICATIONS:
 	Find the index to PFftab[] entry whose "fname" field is the
 	same as "fname". 
-
-AUTHOR: clc
-
-RETURN VALUE:
-	The desired index, or 
-	-1	if not found
-
 *****************************************************************************/
 {
-int i;
+    int i;
 
 	for (i=0; i < PF_FTAB_SIZE; i++){
 		if(PFftab[i].fname != NULL&& strcmp(PFftab[i].fname,fname) == 0)
@@ -67,21 +60,14 @@ int i;
 	return(-1);
 }
 
-static PFftabFindFree()
+static int PFftabFindFree()
 /****************************************************************************
 SPECIFICATIONS:
 	Find a free entry in the open file table "PFtab", and return its
 	index.
-
-AUTHOR: clc
-
-RETURN VALUE:
-	If >=0, the index of the free entry.
-	Otherwise, none can be found.
-
 *****************************************************************************/
 {
-int i;
+    int i;
 
 	for (i=0; i < PF_FTAB_SIZE; i++)
 		if (PFftab[i].fname == NULL)
@@ -89,26 +75,17 @@ int i;
 	return(-1);
 }
 
-PFreadfcn(fd,pagenum,buf)
-int fd;	/* file descriptor */
-int pagenum; /* page number */
-PFfpage *buf;
+int PFreadfcn(int fd, int pagenum, PFfpage *buf)
 /****************************************************************************
 SPECIFICATIONS:
 	Read the paged numbered "pagenum" from the file indexed by "fd"
 	into the page buffer "buf".
-
-AUTHOR: clc
-
-RETURN VALUE:
-	PFE_OK	if ok
-	PF error code if not OK.
 *****************************************************************************/
 {
-int error;
+    int error;
 
 	/* seek to the appropriate place */
-	if ((error=lseek(PFftab[fd].unixfd,pagenum*sizeof(PFfpage)+PF_HDR_SIZE,
+	if ((error=lseek(PFftab[fd].unixfd, (long)(pagenum*sizeof(PFfpage)+PF_HDR_SIZE),
 				L_SET)) == -1){
 		PFerrno = PFE_UNIX;
 		return(PFerrno);
@@ -126,27 +103,17 @@ int error;
 	return(PFE_OK);
 }
 
-PFwritefcn(fd,pagenum,buf)
-int fd;		/* file descriptor */
-int pagenum;	/* page to read */
-PFfpage *buf;	/* buffer where to read the page */
+int PFwritefcn(int fd, int pagenum, PFfpage *buf)
 /****************************************************************************
 SPECIFICATIONS:
 	Write the page numbered "pagenum" from the buffer indexed
 	by "buf" into the file indexed by "fd".
-
-AUTHOR: clc
-
-RETURN VALUE:
-	PFE_OK	if ok.
-	PF errod code if not OK.
-
 *****************************************************************************/
 {
-int error;
+    int error;
 
 	/* seek to the right place */
-	if ((error=lseek(PFftab[fd].unixfd,pagenum*sizeof(PFfpage)+PF_HDR_SIZE,
+	if ((error=lseek(PFftab[fd].unixfd, (long)(pagenum*sizeof(PFfpage)+PF_HDR_SIZE),
 				L_SET)) == -1){
 		PFerrno = PFE_UNIX;
 		return(PFerrno);
@@ -168,21 +135,19 @@ int error;
 
 /************************* Interface Routines ****************************/
 
-void PF_Init()
+void PF_Init(int bufsize)
 /****************************************************************************
 SPECIFICATIONS:
 	Initialize the PF interface. Must be the first function called
-	in order to use the PF ADT.
-
-AUTHOR: clc
-
-RETURN VALUE: none
-
-GLOBAL VARIABLES MODIFIED:
-	PFftab
+	in order to use the PF ADT. Initializes the buffer manager
+    with `bufsize` pages.
 *****************************************************************************/
 {
-int i;
+    int i;
+
+    /* init the buffer manager */
+    PFbufInit(bufsize);
+
 	/* init the hash table */
 	PFhashInit();
 
@@ -192,23 +157,16 @@ int i;
 	}
 }
 
-PF_CreateFile(fname)
-char *fname;	/* name of file to create */
+int PF_CreateFile(char *fname)
 /****************************************************************************
 SPECIFICATIONS:
 	Create a paged file called "fname". The file should not have
 	already existed before.
-
-AUTHOR: clc
-
-RETURN VALUE:
-	PFE_OK	if OK
-	PF error code if error.
 *****************************************************************************/
 {
-int fd;	/* unix file descripotr */
-PFhdr_str hdr;	/* file header */
-int error;
+    int fd;	/* unix file descripotr */
+    PFhdr_str hdr;	/* file header */
+    int error;
 
 	/* create file for exclusive use */
 	if ((fd=open(fname,O_CREAT|O_EXCL|O_WRONLY,0664))<0){
@@ -239,22 +197,14 @@ int error;
 }
 
 
-PF_DestroyFile(fname)
-char *fname;		/* file name to destroy */
+int PF_DestroyFile(char *fname)
 /****************************************************************************
 SPECIFICATIONS:
 	Destroy the paged file whose name is "fname". The file should
 	exist, and should not be already open.
-
-AUTHOR:
-	clc
-
-RETURN VALUE:
-	PFE_OK 	if success
-	PF error codes if error
 *****************************************************************************/
 {
-int error;
+    int error;
 
 	if (PFtabFindFname(fname)!= -1){
 		/* file is open */
@@ -273,30 +223,15 @@ int error;
 }
 
 
-PF_OpenFile(fname)
-char *fname;		/* name of the file to open */
+int PF_OpenFile(char *fname, PF_Strategy strategy)
 /****************************************************************************
 SPECIFICATIONS:
-	Open the paged file whose name is fname.  It is possible to open
-	a file more than once. Warning: Openinging a file more than once for 
-	write operations is not prevented. The possible consequence is
-	the corruption of the file structure, which will crash
-	the Paged File functions. On the other hand, opening a file
-	more than once for reading is OK.
-
-AUTHOR: clc
-
-RETURN VALUE:
-	The file descriptor, which is >= 0, if no error.
-	PF error codes otherwise.
-
-IMPLEMENTATION NOTES:
-	A file opened more than once will have different file descriptors
-	returned. Separate buffers are used.
+	Open the paged file whose name is fname.
+    The replacement strategy (PF_LRU or PF_MRU) is specified.
 *****************************************************************************/
 {
-int count;	/* # of bytes in read */
-int fd; /* file descriptor */
+    int count;	/* # of bytes in read */
+    int fd; /* file descriptor */
 
 	/* find a free entry in the file table */
 	if ((fd=PFftabFindFree())< 0){
@@ -334,26 +269,21 @@ int fd; /* file descriptor */
 		return(PFerrno);
 	}
 
+    /* Store the replacement strategy */
+    PFftab[fd].strategy = strategy;
+
 	return(fd);
 }
 
-PF_CloseFile(fd)
-int fd;		/* file descriptor to close */
+int PF_CloseFile(int fd)
 /****************************************************************************
 SPECIFICATIONS:
 	Close the file indexed by file descriptor fd. The file should have
 	been opened with PFopen(). It is an error to close a file
 	with pages still fixed in the buffer.
-
-AUTHOR: clc
-
-RETURN VALUE:
-	PFE_OK	if OK
-	PF error code if error.
-
 *****************************************************************************/
 {
-int error;
+    int error;
 
 	if (PFinvalidFd(fd)){
 		/* invalid file descriptor */
@@ -369,7 +299,7 @@ int error;
 	if (PFftab[fd].hdrchanged){
 		/* write the header back to the file */
 		/* First seek to the appropriate place */
-		if ((error=lseek(PFftab[fd].unixfd,(unsigned)0,L_SET)) == -1){
+		if ((error=lseek(PFftab[fd].unixfd,(long)0,L_SET)) == -1){
 			/* seek error */
 			PFerrno = PFE_UNIX;
 			return(PFerrno);
@@ -402,59 +332,29 @@ int error;
 }
 
 
-PF_GetFirstPage(fd,pagenum,pagebuf)
-int fd;	/* file descriptor */
-int *pagenum;	/* page number of first page */
-char **pagebuf;	/* pointer to the pointer to buffer */
+int PF_GetFirstPage(int fd, int *pagenum, char **pagebuf)
 /****************************************************************************
 SPECIFICATIONS:
 	Read the first page into memory and set *pagebuf to point to it.
 	Set *pagenum to the page number of the page read.
-	The page read is fixed in the buffer until it is unixed with
-	PFunfix().
-
-AUTHOR: clc
-
-RETURN VALUE:
-	PFE_OK	if no error.
-	PFE_EOF	if end of file reached.(meaning there is no first page. )
-	other PF error code if other error.
-
 *****************************************************************************/
 {
-
 	*pagenum = -1;
 	return(PF_GetNextPage(fd,pagenum,pagebuf));
 }
 
 
-PF_GetNextPage(fd,pagenum,pagebuf)
-int fd;	/* file descriptor of the file */
-int *pagenum;	/* old page number on input, new page number on output */
-char **pagebuf;	/* pointer to pointer to buffer of page data */
+int PF_GetNextPage(int fd, int *pagenum, char **pagebuf)
 /****************************************************************************
 SPECIFICATIONS:
 	Read the next valid page after *pagenum, the current page number,
 	and set *pagebuf to point to the page data. Set *pagenum
-	to be the new page number. The new page is fixed in memory 
-	until PFunfix() is called.
-	Note that PF_GetNextPage() with *pagenum == -1 will return the 
-	first valid page. PFgetFirst() is just a short hand for this.
-
-AUTHOR: clc
-
-RETURN VALUE:
-	PFE_OK	if success
-	PFE_EOF	if end of file reached without encountering
-		any used page data. 
-	PFE_INVALIDPAGE  if page number is invalid.
-	other PF errors code for other error.
-
+	to be the new page number.
 *****************************************************************************/
 {
-int temppage;	/* page number to scan for next valid page */
-int error;	/* error code */
-PFfpage *fpage;	/* pointer to file page */
+    int temppage;	/* page number to scan for next valid page */
+    int error;	/* error code */
+    PFfpage *fpage;	/* pointer to file page */
 
 	if (PFinvalidFd(fd)){
 		PFerrno = PFE_FD;
@@ -490,28 +390,15 @@ PFfpage *fpage;	/* pointer to file page */
 
 }
 
-PF_GetThisPage(fd,pagenum,pagebuf)
-int fd;		/* file descriptor */
-int pagenum;	/* page number to read */
-char **pagebuf;	/* pointer to pointer to page data */
+int PF_GetThisPage(int fd, int pagenum, char **pagebuf)
 /****************************************************************************
 SPECIFICATIONS:
 	Read the page specifeid by "pagenum" and set *pagebuf to point
 	to the page data. The page number should be valid.
-
-AUTHOR: clc
-
-RETURN VALUE:
-	PFE_OK	if no error.
-	PFE_INVALIDPAGE if invalid page number is specified.
-	PFE_PAGEFIXED if page already fixed in memory. In this case,
-		*pagebuf  is still set to point to the buffer that contains
-		the page data.
-	other PF error codes if other error encountered.
 *****************************************************************************/
 {
-int error;
-PFfpage *fpage;
+    int error;
+    PFfpage *fpage;
 
 	if (PFinvalidFd(fd)){
 		PFerrno = PFE_FD;
@@ -545,27 +432,16 @@ PFfpage *fpage;
 	}
 }
 
-PF_AllocPage(fd,pagenum,pagebuf)
-int fd;		/* file descriptor */
-int *pagenum;	/* page number */
-char **pagebuf;	/* pointer to pointer to page buffer*/
+int PF_AllocPage(int fd, int *pagenum, char **pagebuf)
 /****************************************************************************
 SPECIFICATIONS:
 	Allocate a new, empty page for file "fd".
 	set *pagenum to the new page number. 
 	Set *pagebuf to point to the buffer for that page.
-	The page allocated is fixed in the buffer.
-
-AUTHOR: clc
-
-RETURN VALUE:
-	PFE_OK	if ok
-	PF error codes if not ok.
-
 *****************************************************************************/
 {
-PFfpage *fpage;	/* pointer to file page */
-int error;
+    PFfpage *fpage;	/* pointer to file page */
+    int error;
 
 	if (PFinvalidFd(fd)){
 		PFerrno= PFE_FD;
@@ -616,24 +492,15 @@ int error;
 	return(PFE_OK);
 }
 
-PF_DisposePage(fd,pagenum)
-int fd;		/* file descriptor */
-int pagenum;	/* page number */
+int PF_DisposePage(int fd, int pagenum)
 /****************************************************************************
 SPECIFICATIONS:
 	Dispose the page numbered "pagenum" of the file "fd".
 	Only a page that is not fixed in the buffer can be disposed.
-
-AUTHOR: clc
-
-RETURN VALUE:
-	PFE_OK	if no error.
-	PF error code if error.
-
 *****************************************************************************/
 {
-PFfpage *fpage;	/* pointer to file page */
-int error;
+    PFfpage *fpage;	/* pointer to file page */
+    int error;
 
 	if (PFinvalidFd(fd)){
 		PFerrno = PFE_FD;
@@ -646,8 +513,13 @@ int error;
 	}
 
 	if ((error=PFbufGet(fd,pagenum,&fpage,PFreadfcn,PFwritefcn))!= PFE_OK)
-		/* can't get this page */
+    {
+        /*
+         * If page is fixed, PFbufGet returns PFE_PAGEFIXED.
+         * This is an error for DisposePage, so we return it.
+         */
 		return(error);
+    }
 	
 	if (fpage->nextfree != PF_PAGE_USED){
 		/* this page already freed */
@@ -664,29 +536,18 @@ int error;
 	PFftab[fd].hdr.firstfree = pagenum;
 	PFftab[fd].hdrchanged = TRUE;
 
-	/* unfix this page */
+	/* unfix this page, marking it dirty */
 	return(PFbufUnfix(fd,pagenum,TRUE));
 }
 
-PF_UnfixPage(fd,pagenum,dirty)
-int fd;	/* file descriptor */
-int pagenum;	/* page number */
-int dirty;	/* true if file is dirty */
+int PF_UnfixPage(int fd, int pagenum, int dirty)
 /****************************************************************************
 SPECIFICATIONS:
 	Tell the Paged File Interface that the page numbered "pagenum"
 	of the file "fd" is no longer needed in the buffer.
 	Set the variable "dirty" to TRUE if page has been modified.
-
-AUTHOR: clc
-
-RETURN VALUE:
-	PFE_OK	if no error
-	PF error code if error.
-
 *****************************************************************************/
 {
-
 	if (PFinvalidFd(fd)){
 		PFerrno = PFE_FD;
 		return(PFerrno);
@@ -699,6 +560,62 @@ RETURN VALUE:
 
 	return(PFbufUnfix(fd,pagenum,dirty));
 }
+
+
+int PF_MarkDirty(int fd, int pagenum)
+/****************************************************************************
+SPECIFICATIONS:
+    Explicitly mark a fixed page as dirty.
+*****************************************************************************/
+{
+    if (PFinvalidFd(fd)){
+		PFerrno = PFE_FD;
+		return(PFerrno);
+	}
+
+	if (PFinvalidPagenum(fd,pagenum)){
+		PFerrno = PFE_INVALIDPAGE;
+		return(PFerrno);
+	}
+
+    return(PFbufMarkDirty(fd, pagenum));
+}
+
+
+/****************************************************************************
+ * Statistics Interface Functions
+ * (These are just wrappers for the buffer manager's functions)
+ ****************************************************************************/
+
+void PF_ResetStats()
+{
+    PFbufResetStats();
+}
+
+long PF_GetLogicalIOs()
+{
+    return PFbufGetLogicalIOs();
+}
+
+long PF_GetPhysicalIOs()
+{
+    return PFbufGetPhysicalIOs();
+}
+
+long PF_GetDiskReads()
+{
+    return PFbufGetDiskReads();
+}
+
+long PF_GetDiskWrites()
+{
+    return PFbufGetDiskWrites();
+}
+
+
+/****************************************************************************
+ * Error Handling
+ ****************************************************************************/
 
 /* error messages */
 static char *PFerrormsg[]={
@@ -724,22 +641,27 @@ static char *PFerrormsg[]={
 "page already in hash table"
 };
 
-void PF_PrintError(s)
-char *s;	/* string to write */
+void PF_PrintError(char *s)
 /****************************************************************************
 SPECIFICATIONS:
 	Write the string "s" onto stderr, then write the last
 	error message from PF onto stderr.
-
-AUTHOR: clc
-
-RETURN VALUE: none
-
 *****************************************************************************/
 {
+    /* Check for PFE_OK */
+    if (PFerrno == PFE_OK) {
+        fprintf(stderr, "%s: %s\n", s, PFerrormsg[0]);
+        return;
+    }
+
+    /* Check for valid error code range */
+    if (PFerrno > 0 || PFerrno < PFE_HASHPAGEEXIST) {
+        fprintf(stderr, "%s: Unknown error code %d\n", s, PFerrno);
+        return;
+    }
 
 	fprintf(stderr,"%s",s);
-	fprintf(stderr,":%s",PFerrormsg[-1*PFerrno]);
+	fprintf(stderr,": %s",PFerrormsg[-1*PFerrno]);
 	if (PFerrno == PFE_UNIX)
 		/* print the unix error message */
 		perror(" ");

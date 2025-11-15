@@ -11,7 +11,7 @@ def run_test(read_ratio, write_ratio):
     }
 
     # Run the test program (e.g., testpf) and capture its output
-    result = subprocess.run(["./testpf"], capture_output=True, text=True, env=env)
+    result = subprocess.run(["./testpf_seq"], capture_output=True, text=True, env=env)
 
     # Parse the output to extract statistics
     output = result.stdout
@@ -67,12 +67,15 @@ def plot_graph(stats):
     # Plot Disk Writes
     plt.plot(read_ratios, disk_writes, label="Disk Writes", marker="o")
 
+    plt.text(0.5, 0.95, "Strategy: Sequential Access", horizontalalignment='center', verticalalignment='center', transform=plt.gca().transAxes, fontsize=12, bbox=dict(facecolor='white', alpha=0.5))
+
+
     plt.xlabel("Read Ratio (%)")
     plt.ylabel("I/O Counts")
     plt.title("I/O Statistics vs Read/Write Mixtures")
     plt.legend()
     plt.grid(True)
-    plt.savefig("io_statistics.png")  # Save the graph as a PNG file
+    plt.savefig("SequentialIO_statistics.png")  # Save the graph as a PNG file
     plt.show()
 
 # Main function
@@ -81,7 +84,7 @@ def main():
     stats = collect_statistics()
     print("Statistics collected. Generating graph...")
     plot_graph(stats)
-    print("Graph saved as 'io_statistics.png'.")
+    print("Graph saved as 'SequentialIO_statistics.png'.")
 
 if __name__ == "__main__":
     main()
