@@ -10,7 +10,7 @@
 #define FALSE 0
 #endif
 
-/************** Error Codes *********************************/
+
 #define PFE_OK		0	/* OK */
 #define PFE_NOMEM	-1	/* no memory */
 #define PFE_NOBUF	-2	/* no buffer space */
@@ -44,9 +44,6 @@ typedef enum { PF_LRU = 0, PF_MRU = 1 } PF_Strategy;
 /* externs from the PF layer */
 extern int PFerrno;		/* error number of last error */
 
-/************************************************************
- * PF Layer Interface
- ************************************************************/
 
 /*
  * PF_Init
