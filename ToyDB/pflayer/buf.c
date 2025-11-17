@@ -137,8 +137,13 @@ static int PFbufInternalAlloc(PFbpage **bpage, int (*writefcn)(int, int, PFfpage
 		*bpage = tbpage;
 	}
 
-    /* ALWAYS link a new page (from a miss) to the head. */
-	PFbufLinkHead(*bpage);
+
+	if (PFftab[fd].strategy == PF_LRU) {
+		PFbufLinkHead(*bpage);
+	} else {
+		PFbufLinkTail(*bpage);
+	}
+
 	return(PFE_OK);
 }
 
