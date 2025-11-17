@@ -1,8 +1,11 @@
-# DBMS Assignment 1: ToyDB Enhancements
+# DBMS Project : ToyDB Enhancements
 
 ## Team Members
-Aurindum Banerjee B23CS1006
-Lokesh Motwani B23CS1033
+
+> **Aurindum Banerjee** (B23CS1006)  
+> **Lokesh Motwani** (B23CS1033)
+
+---
 
 This project implements and evaluates several enhancements across three layers of the ToyDB system:
 1. **Paged File Layer (PF)**
