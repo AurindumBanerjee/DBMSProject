@@ -18,7 +18,7 @@ Each objective is implemented, tested, and evaluated with performance graphs and
 
 # Objective 1 - Page Buffering (PF Layer)
 
-## ✔ Description
+## Description
 
 Objective 1 focuses on implementing a **buffer pool** for the PF layer with:
 
@@ -38,10 +38,10 @@ Objective 1 focuses on implementing a **buffer pool** for the PF layer with:
 
 ## Objective 1 Results
 
-### ▶ LRU vs MRU — Total Physical I/O Comparison  
+### LRU vs MRU — Total Physical I/O Comparison  
 ![LRU vs MRU Physical IO](ToyDB/images/Objective1_Phy.jpg)
 
-### ▶ Full Statistics: Logical, Physical, Reads, Writes for LRU & MRU  
+### Full Statistics: Logical, Physical, Reads, Writes for LRU & MRU  
 ![LRU vs MRU Detailed IO](ToyDB/images/Objective1_IO.jpg)
 
 These graphs show:
@@ -55,7 +55,7 @@ These graphs show:
 
 # Objective 2 - Variable-Length Records (RM Layer)
 
-## ✔ Description
+## Description
 
 In this, we implemented a **slotted-page layout** to store variable-length records efficiently:
 
@@ -78,7 +78,7 @@ Findings:
 
 # Objective 3 - B+ Tree Index Construction (AM Layer)
 
-## ✔ Description
+## Description
 
 We implemented and compared three index build strategies:
 
