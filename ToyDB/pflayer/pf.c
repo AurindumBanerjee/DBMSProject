@@ -435,61 +435,72 @@ SPECIFICATIONS:
 int PF_AllocPage(int fd, int *pagenum, char **pagebuf)
 /****************************************************************************
 SPECIFICATIONS:
-	Allocate a new, empty page for file "fd".
-	set *pagenum to the new page number. 
-	Set *pagebuf to point to the buffer for that page.
+    Allocate a new, empty page for file "fd".
+    set *pagenum to the new page number. 
+    Set *pagebuf to point to the buffer for that page.
 *****************************************************************************/
 {
-    PFfpage *fpage;	/* pointer to file page */
+    PFfpage *fpage; /* pointer to file page */
     int error;
 
-	if (PFinvalidFd(fd)){
-		PFerrno= PFE_FD;
-		return(PFerrno);
-	}
+    if (PFinvalidFd(fd)){
+        PFerrno= PFE_FD;
+        return(PFerrno);
+    }
 
-	if (PFftab[fd].hdr.firstfree != PF_PAGE_LIST_END){
-		/* get a page from the free list */
-		*pagenum = PFftab[fd].hdr.firstfree;
-		if ((error=PFbufGet(fd,*pagenum,&fpage,PFreadfcn,
-					PFwritefcn))!= PFE_OK)
-			/* can't get the page */
-			return(error);
-		PFftab[fd].hdr.firstfree = fpage->nextfree;
-		PFftab[fd].hdrchanged = TRUE;
-	}
-	else {
-		/* Free list empty, allocate one more page from the file */
-		*pagenum = PFftab[fd].hdr.numpages;
-		if ((error=PFbufAlloc(fd,*pagenum,&fpage,PFwritefcn))!= PFE_OK)
-			/* can't allocate a page */
-			return(error);
-	
-		/* increment # of pages for this file */
-		PFftab[fd].hdr.numpages++;
-		PFftab[fd].hdrchanged = TRUE;
+    if (PFftab[fd].hdr.firstfree != PF_PAGE_LIST_END){
+        /* get a page from the free list */
+        *pagenum = PFftab[fd].hdr.firstfree;
+        if ((error=PFbufGet(fd,*pagenum,&fpage,PFreadfcn,
+                    PFwritefcn))!= PFE_OK)
+            /* can't get the page */
+            return(error);
+        PFftab[fd].hdr.firstfree = fpage->nextfree;
+        PFftab[fd].hdrchanged = TRUE;
 
-		/* mark this page dirty */
-		if ((error=PFbufUsed(fd,*pagenum))!= PFE_OK){
-			printf("internal error: PFalloc()\n");
-			exit(1);
-		}
+        /* * --- THIS IS THE CORRECT FIX ---
+         * Mark this recycled page as dirty immediately,
+         * just like the "new page" branch does.
+         */
+        if ((error=PFbufUsed(fd,*pagenum))!= PFE_OK){
+            printf("internal error: PFalloc (recycle)\n");
+            exit(1);
+        }
+        /* --- END FIX --- */
 
-	}
+    }
+    else {
+        /* Free list empty, allocate one more page from the file */
+        *pagenum = PFftab[fd].hdr.numpages;
+        if ((error=PFbufAlloc(fd,*pagenum,&fpage,PFwritefcn))!= PFE_OK)
+            /* can't allocate a page */
+            return(error);
+    
+        /* increment # of pages for this file */
+        PFftab[fd].hdr.numpages++;
+        PFftab[fd].hdrchanged = TRUE;
 
-	/* zero out the page. Seems to be a nice thing to do,
-	at least for debugging. */
-	/*
-	bzero(fpage->pagebuf,PF_PAGE_SIZE);
-	*/
+        /* mark this page dirty */
+        if ((error=PFbufUsed(fd,*pagenum))!= PFE_OK){
+            printf("internal error: PFalloc()\n");
+            exit(1);
+        }
 
-	/* Mark the new page used */
-	fpage->nextfree = PF_PAGE_USED;
+    }
 
-	/* set return value */
-	*pagebuf = fpage->pagebuf;
-	
-	return(PFE_OK);
+    /* zero out the page. Seems to be a nice thing to do,
+    at least for debugging. */
+    /*
+    bzero(fpage->pagebuf,PF_PAGE_SIZE);
+    */
+
+    /* Mark the new page used */
+    fpage->nextfree = PF_PAGE_USED;
+
+    /* set return value */
+    *pagebuf = fpage->pagebuf;
+    
+    return(PFE_OK);
 }
 
 int PF_DisposePage(int fd, int pagenum)
