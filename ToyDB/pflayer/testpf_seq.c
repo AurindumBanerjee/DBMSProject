@@ -18,7 +18,7 @@
 #define BUFFER_SIZE 20   /* The buffer pool size to initialize */
 #define NUM_PAGES 50     /* File size (must be > BUFFER_SIZE to test eviction) */
 #define WORKLOAD_SIZE 5000 /* Total number of read/write operations */
-#define STRATEGY PF_LRU /* PF_LRU or PF_MRU */
+#define STRATEGY PF_MRU /* PF_LRU or PF_MRU */
 
 
 /*

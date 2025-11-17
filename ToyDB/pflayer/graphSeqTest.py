@@ -68,7 +68,7 @@ def plot_graph(stats):
     # Plot Disk Writes
     plt.plot(read_ratios, disk_writes, label="Disk Writes", marker="o")
 
-    plt.text(0.5, 0.95, "Strategy: LRU Sequential Access", horizontalalignment='center', verticalalignment='center', transform=plt.gca().transAxes, fontsize=12, bbox=dict(facecolor='white', alpha=0.5))
+    plt.text(0.5, 0.95, "Strategy: MRU Sequential Access", horizontalalignment='center', verticalalignment='center', transform=plt.gca().transAxes, fontsize=12, bbox=dict(facecolor='white', alpha=0.5))
 
 
     plt.xlabel("Read Ratio (%)")

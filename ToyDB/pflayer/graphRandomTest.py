@@ -69,7 +69,7 @@ def plot_graph(stats):
 
 
     # Add a label to show strategy used, Random Access
-    plt.text(0.5, 0.95, "Strategy: LRU Random Access", horizontalalignment='center', verticalalignment='center', transform=plt.gca().transAxes, fontsize=12, bbox=dict(facecolor='white', alpha=0.5))
+    plt.text(0.5, 0.95, "Strategy: MRU Random Access", horizontalalignment='center', verticalalignment='center', transform=plt.gca().transAxes, fontsize=12, bbox=dict(facecolor='white', alpha=0.5))
 
     plt.xlabel("Read Ratio (%)")
     plt.ylabel("I/O Counts")
