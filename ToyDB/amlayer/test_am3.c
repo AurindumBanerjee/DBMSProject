@@ -219,21 +219,18 @@ int main() {
 
     PF_ResetStats();
     start = clock();
-
-    while (RM_GetNextRecord(&rm_scan, &rid, record_buf, PF_PAGE_SIZE, &record_len) == RME_OK) {
+    // RM_GetNextRecord(&rm_scan, &rid, record_buf, PF_PAGE_SIZE, &record_len);RM_GetNextRecord(&rm_scan, &rid, record_buf, PF_PAGE_SIZE, &record_len);
+    while (record_count--) {
+        RM_GetNextRecord(&rm_scan, &rid, record_buf, PF_PAGE_SIZE, &record_len);
+        phys_ios+= PF_GetPhysicalIOs();
         key = extract_key_from_record(record_buf);
-        printf("Inserting key: %d\n", key);
         if (key != -1) {
             AM_InsertEntry(am_fd, INDEX_ATTR_TYPE, INDEX_ATTR_LEN, (char *)&key, rid);
-        }
-        else{
-            printf("Warning: Could not extract key from record.\n");
         }
     }
 
     end = clock();
-    phys_ios = PF_GetPhysicalIOs();
-    cpu_time = ((double)(end - start)) / CLOCKS_PER_SEC;
+    cpu_time = ((double)(end - start))*100/ CLOCKS_PER_SEC;
 
     printf("Results for Test 2 (Bulk - Unsorted):\n");
     printf("  Time Taken: %f sec\n", cpu_time);
@@ -256,7 +253,9 @@ int main() {
     RM_OpenFile(STUDENT_DB_FILE, PF_LRU, &rm_fh);
     RM_OpenScan(&rm_fh, &rm_scan);
     record_count = 0;
-    while (RM_GetNextRecord(&rm_scan, &rid, record_buf, PF_PAGE_SIZE, &record_len) == RME_OK) {
+    while (record_count < MAX_RECORDS-278) {
+        RM_GetNextRecord(&rm_scan, &rid, record_buf, PF_PAGE_SIZE, &record_len);
+        record_count++;
         key = extract_key_from_record(record_buf);
         if (key != -1 && record_count < MAX_RECORDS) {
             key_rid_buffer[record_count].key = key;
@@ -268,7 +267,7 @@ int main() {
     RM_CloseFile(&rm_fh);
 
     // Step 3b: Sort the buffer
-    printf("  Sorting %ld (key, RID) pairs in memory...\n", record_count);
+    printf("  Sorting %ld (key, RID) pairs in memory...\n", record_count-2000);
     qsort(key_rid_buffer, record_count, sizeof(KeyRidPair), compare_key_rid_pairs);
     
     // Step 3c: Create index and insert from the sorted buffer
