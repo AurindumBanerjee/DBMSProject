@@ -1,5 +1,8 @@
 # DBMS Assignment 1: ToyDB Enhancements
 
+## Aurindum Banerjee B23CS1006
+## Lokesh Motwani B23CS1033
+
 This project implements and evaluates several enhancements across three layers of the ToyDB system:
 1. **Paged File Layer (PF)**
 2. **Record Management Layer (RM)**
@@ -102,8 +105,3 @@ Summary:
   - Follows the optimal B+ Tree build strategy taught in DBMS courses
 
 
-📄 **PDF version of this README**  
-🌐 **HTML formatted report**  
-📊 **Combined multi-page infographic**
-
-Just tell me!
