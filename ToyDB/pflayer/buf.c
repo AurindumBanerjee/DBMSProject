@@ -35,17 +35,19 @@ static void PFbufInsertFree(PFbpage *bpage)
 static void PFbufLinkHead(PFbpage *bpage)
 {
 	bpage->nextpage = PFfirstbpage;
+
 	bpage->prevpage = NULL;
+
 	if (PFfirstbpage != NULL)
 		PFfirstbpage->prevpage = bpage;
+
 	PFfirstbpage = bpage;
+
 	if (PFlastbpage == NULL)
 		PFlastbpage = bpage;
 }
 
-/*
- * NEW FUNCTION TO LINK A PAGE AT THE TAIL (LRU POSITION)
- */
+// New function to link a page at the tail (LRU position)
 static void PFbufLinkTail(PFbpage *bpage)
 {
     bpage->nextpage = NULL;
@@ -137,18 +139,13 @@ static int PFbufInternalAlloc(PFbpage **bpage, int (*writefcn)(int, int, PFfpage
 		*bpage = tbpage;
 	}
 
-    /*
-     * *******************************************************************
-     * FINAL FIX: A new page brought in from disk is ALWAYS the
-     * "Most Recently Used" and must ALWAYS be linked to the head.
-     * *******************************************************************
-     */
+ 
+    // Page at head is most recently use
 	PFbufLinkHead(*bpage);
 	return(PFE_OK);
 }
 
 
-/************************* Interface to the Outside World ****************/
 
 void PFbufInit(int bufsize)
 {
@@ -245,6 +242,8 @@ int PFbufUnfix(int fd, int pagenum, int dirty)
      */
 	
     strategy = PFftab[fd].strategy;
+	fprintf(stderr, "DEBUG: PF_OpenFile fd=%d strategy=%d (macro)\n", fd, PFftab[fd].strategy);
+
     
 	PFbufUnlink(bpage);
 
