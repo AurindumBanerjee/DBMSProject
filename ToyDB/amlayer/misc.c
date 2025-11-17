@@ -1,4 +1,6 @@
 /* misc.c */
+#include <stdio.h>  /* ADDED */
+#include <string.h> /* ADDED */
 #include "pf.h"
 #include "testam.h"
 #include "am.h"
@@ -7,7 +9,8 @@
 pad end of str until up to length bytes with '\0'
 Assume that str is terminated with '\0'
 ***********************************************************/
-padstring(str,length)
+/* ADDED void return type */
+void padstring(str,length)
 char *str;
 int length;
 {
@@ -18,7 +21,8 @@ int i;
 }
 
 
-xAM_CreateIndex(fname,indexno,attrtype,attrlen)
+/* ADDED int return type */
+int xAM_CreateIndex(fname,indexno,attrtype,attrlen)
 char *fname;
 int indexno;
 char attrtype;
@@ -34,7 +38,8 @@ int errval;
 	return(errval);
 }
 
-xAM_DestroyIndex(fname,indexno)
+/* ADDED int return type */
+int xAM_DestroyIndex(fname,indexno)
 char *fname;
 int indexno;
 {
@@ -47,8 +52,8 @@ int errval;
 	return(errval);
 }
 
-
-xAM_InsertEntry(fd,attrtype,attrlen,val,recid)
+/* ADDED int return type */
+int xAM_InsertEntry(fd,attrtype,attrlen,val,recid)
 int fd;
 char attrtype;
 int attrlen;
@@ -65,7 +70,8 @@ int errval;
 	return(errval);
 }
 
-xAM_DeleteEntry(fd,attrtype,attrlen,val,recid)
+/* ADDED int return type */
+int xAM_DeleteEntry(fd,attrtype,attrlen,val,recid)
 int fd;
 char attrtype;
 int attrlen;
@@ -82,7 +88,8 @@ int errval;
 	return(errval);
 }
 
-xAM_OpenIndexScan(fd,attrtype,attrlen,op,val)
+/* ADDED int return type */
+int xAM_OpenIndexScan(fd,attrtype,attrlen,op,val)
 int fd;
 char attrtype;
 int  op;
@@ -114,7 +121,8 @@ RecIdType recid;
 	return(recid);
 }
 
-xAM_CloseIndexScan(sd)
+/* ADDED int return type */
+int xAM_CloseIndexScan(sd)
 int sd;
 {
 
@@ -127,19 +135,23 @@ int errval;
 	return(errval);
 }
 
-xPF_OpenFile(fname)
+/* ADDED int return type */
+int xPF_OpenFile(fname)
 char *fname;
 {
 int errval;
 
-	if ((errval=PF_OpenFile(fname))<0){
-		printf("PF_OpenFile(%s) failed: %d\n",errval);
+    /* --- MODIFIED --- Added PF_LRU strategy */
+	if ((errval=PF_OpenFile(fname, PF_LRU))<0){
+        /* --- MODIFIED --- Fixed printf format string */
+		printf("PF_OpenFile(%s) failed: %d\n", fname, errval);
 		exit(1);
 	}
 	return(errval);
 }
 
-xPF_CloseFile(fd)
+/* ADDED int return type */
+int xPF_CloseFile(fd)
 int fd;
 {
 int errval;

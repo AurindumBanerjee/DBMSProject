@@ -1,10 +1,9 @@
-
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include "rm.h"
 #include "pf.h"
-#include "pftypes.h" // We need this to access the PFftab
+#include "pftypes.h" 
 
 /* * Internal Page Structure
  *
@@ -52,6 +51,19 @@ static void RM_InitPage(char *pageData) {
     header->freeSpaceOffset = sizeof(PageHeader);
 }
 
+/* --- Helper Functions for Packed RID --- */
+
+RID RM_PackRID(int pageNum, int slotNum) {
+    // Upper 16 bits for pageNum, Lower 16 bits for slotNum
+    return (pageNum << 16) | (slotNum & 0xFFFF);
+}
+
+void RM_UnpackRID(RID rid, int *pageNum, int *slotNum) {
+    *pageNum = (rid >> 16) & 0xFFFF;
+    *slotNum = rid & 0xFFFF;
+}
+
+
 /* --- File Management --- */
 
 int RM_CreateFile(char *fileName) {
@@ -82,16 +94,36 @@ int RM_CloseFile(RM_FileHandle *fh) {
 int RM_InsertRecord(RM_FileHandle *fh, char *data, int dataLength, RID *rid) {
     int pageNum, pf_err;
     char *pageData;
-    int spaceNeeded = dataLength + sizeof(SlotEntry);
+    int spaceNeeded = dataLength; // Space for data
+    
+    int foundEmptySlot = FALSE;
+    int targetSlotID = -1;
 
     // 1. Find a page with enough space
-    // We start by iterating through existing pages.
     pageNum = -1;
     while (PF_GetNextPage(fh->pfFileDesc, &pageNum, &pageData) == PFE_OK) {
-        if (GET_CONTIGUOUS_FREE_SPACE(pageData) >= spaceNeeded) {
+        PageHeader *header = GET_HEADER(pageData);
+        
+        // Check for an empty slot
+        foundEmptySlot = FALSE;
+        for (int i = 0; i < header->numSlots; i++) {
+            if (GET_SLOT(pageData, i)->recordLength == SLOT_EMPTY) {
+                foundEmptySlot = TRUE;
+                targetSlotID = i;
+                break;
+            }
+        }
+
+        int currentSpaceNeeded = spaceNeeded;
+        if (!foundEmptySlot) {
+            currentSpaceNeeded += sizeof(SlotEntry); // Need space for data AND a new slot
+        }
+
+        if (GET_CONTIGUOUS_FREE_SPACE(pageData) >= currentSpaceNeeded) {
             // Found a page with space!
             break;
         }
+        
         // Unfix the page (not dirty) and continue to the next one
         if ((pf_err = PF_UnfixPage(fh->pfFileDesc, pageNum, FALSE)) != PFE_OK) {
             PF_PrintError("RM_InsertRecord: PF_UnfixPage");
@@ -107,8 +139,9 @@ int RM_InsertRecord(RM_FileHandle *fh, char *data, int dataLength, RID *rid) {
         }
         // Initialize the new page
         RM_InitPage(pageData);
+        targetSlotID = -1; // Will use slot 0
     } else if (PFerrno != PFE_OK) {
-        // Some other error occurred during GetNextPage
+        // Some other error occurred
         PF_PrintError("RM_InsertRecord: PF_GetNextPage");
         return PFerrno;
     }
@@ -116,20 +149,13 @@ int RM_InsertRecord(RM_FileHandle *fh, char *data, int dataLength, RID *rid) {
     // 3. We now have a page (pageData) and pageNum. Insert the record.
     PageHeader *header = GET_HEADER(pageData);
     
-    // 3a. Find a slot
-    int slotID = -1;
-    for (int i = 0; i < header->numSlots; i++) {
-        if (GET_SLOT(pageData, i)->recordLength == SLOT_EMPTY) {
-            slotID = i;
-            break;
-        }
-    }
-    if (slotID == -1) {
-        slotID = header->numSlots; // Use a new slot
+    // 3a. Finalize slot
+    if (targetSlotID == -1) {
+        targetSlotID = header->numSlots; // Use a new slot
     }
 
     // 4. Add the data to the page
-    SlotEntry *slot = GET_SLOT(pageData, slotID);
+    SlotEntry *slot = GET_SLOT(pageData, targetSlotID);
     int dataOffset = header->freeSpaceOffset;
     memcpy(pageData + dataOffset, data, dataLength);
 
@@ -138,13 +164,12 @@ int RM_InsertRecord(RM_FileHandle *fh, char *data, int dataLength, RID *rid) {
     slot->recordLength = dataLength;
     
     header->freeSpaceOffset += dataLength;
-    if (slotID == header->numSlots) {
+    if (targetSlotID == header->numSlots) {
         header->numSlots++;
     }
 
-    // 6. Set the output RID
-    rid->pageNum = pageNum;
-    rid->slotNum = slotID;
+    // 6. Set the output RID (PACKED)
+    *rid = RM_PackRID(pageNum, targetSlotID);
 
     // 7. Unfix the page, marking it as dirty
     if ((pf_err = PF_UnfixPage(fh->pfFileDesc, pageNum, TRUE)) != PFE_OK) {
@@ -155,38 +180,41 @@ int RM_InsertRecord(RM_FileHandle *fh, char *data, int dataLength, RID *rid) {
     return RME_OK;
 }
 
-int RM_DeleteRecord(RM_FileHandle *fh, RID *rid) {
+int RM_DeleteRecord(RM_FileHandle *fh, RID rid) {
     char *pageData;
-    int pf_err;
+    int pf_err, pageNum, slotNum;
 
-    // 1. Get the page
-    if ((pf_err = PF_GetThisPage(fh->pfFileDesc, rid->pageNum, &pageData)) != PFE_OK) {
+    // 1. Unpack the RID
+    RM_UnpackRID(rid, &pageNum, &slotNum);
+
+    // 2. Get the page
+    if ((pf_err = PF_GetThisPage(fh->pfFileDesc, pageNum, &pageData)) != PFE_OK) {
         PF_PrintError("RM_DeleteRecord: PF_GetThisPage");
         return (pf_err == PFE_INVALIDPAGE) ? RME_INVALIDRID : pf_err;
     }
 
     PageHeader *header = GET_HEADER(pageData);
 
-    // 2. Check if RID is valid
-    if (rid->slotNum >= header->numSlots) {
-        PF_UnfixPage(fh->pfFileDesc, rid->pageNum, FALSE); // Not dirty
+    // 3. Check if RID is valid
+    if (slotNum >= header->numSlots) {
+        PF_UnfixPage(fh->pfFileDesc, pageNum, FALSE); // Not dirty
         return RME_INVALIDRID;
     }
     
-    SlotEntry *slot = GET_SLOT(pageData, rid->slotNum);
+    SlotEntry *slot = GET_SLOT(pageData, slotNum);
     if (slot->recordLength == SLOT_EMPTY) {
-        PF_UnfixPage(fh->pfFileDesc, rid->pageNum, FALSE); // Not dirty
+        PF_UnfixPage(fh->pfFileDesc, pageNum, FALSE); // Not dirty
         return RME_INVALIDRID; // Already deleted
     }
 
-    // 3. Get info about the record to be deleted
+    // 4. Get info about the record to be deleted
     int deletedOffset = slot->recordOffset;
     int deletedLength = slot->recordLength;
 
-    // 4. Mark the slot as empty
+    // 5. Mark the slot as empty
     slot->recordLength = SLOT_EMPTY;
 
-    // 5. **Compact the data**
+    // 6. **Compact the data**
     //    Move all data *after* the deleted record to the left
     char *holeStart = pageData + deletedOffset;
     char *holeEnd = holeStart + deletedLength;
@@ -194,7 +222,7 @@ int RM_DeleteRecord(RM_FileHandle *fh, RID *rid) {
     
     memmove(holeStart, holeEnd, dataEnd - holeEnd);
 
-    // 6. Update all other slot offsets
+    // 7. Update all other slot offsets
     for (int i = 0; i < header->numSlots; i++) {
         SlotEntry *otherSlot = GET_SLOT(pageData, i);
         if (otherSlot->recordLength != SLOT_EMPTY && otherSlot->recordOffset > deletedOffset) {
@@ -202,14 +230,14 @@ int RM_DeleteRecord(RM_FileHandle *fh, RID *rid) {
         }
     }
 
-    // 7. Update the header
+    // 8. Update the header
     header->freeSpaceOffset -= deletedLength;
 
     // (Optional) We could shrink header->numSlots if this was the last slot,
     // but we'll leave it for simplicity and slot reuse.
 
-    // 8. Unfix the page, marking it as dirty
-    if ((pf_err = PF_UnfixPage(fh->pfFileDesc, rid->pageNum, TRUE)) != PFE_OK) {
+    // 9. Unfix the page, marking it as dirty
+    if ((pf_err = PF_UnfixPage(fh->pfFileDesc, pageNum, TRUE)) != PFE_OK) {
         PF_PrintError("RM_DeleteRecord: PF_UnfixPage (dirty)");
         return pf_err;
     }
@@ -217,42 +245,45 @@ int RM_DeleteRecord(RM_FileHandle *fh, RID *rid) {
     return RME_OK;
 }
 
-int RM_GetRecord(RM_FileHandle *fh, RID *rid, char *dataBuf, int bufSize, int *dataLength) {
+int RM_GetRecord(RM_FileHandle *fh, RID rid, char *dataBuf, int bufSize, int *dataLength) {
     char *pageData;
-    int pf_err;
+    int pf_err, pageNum, slotNum;
 
-    // 1. Get the page
-    if ((pf_err = PF_GetThisPage(fh->pfFileDesc, rid->pageNum, &pageData)) != PFE_OK) {
+    // 1. Unpack the RID
+    RM_UnpackRID(rid, &pageNum, &slotNum);
+
+    // 2. Get the page
+    if ((pf_err = PF_GetThisPage(fh->pfFileDesc, pageNum, &pageData)) != PFE_OK) {
         PF_PrintError("RM_GetRecord: PF_GetThisPage");
         return (pf_err == PFE_INVALIDPAGE) ? RME_INVALIDRID : pf_err;
     }
 
     PageHeader *header = GET_HEADER(pageData);
 
-    // 2. Check if RID is valid
-    if (rid->slotNum >= header->numSlots) {
-        PF_UnfixPage(fh->pfFileDesc, rid->pageNum, FALSE);
+    // 3. Check if RID is valid
+    if (slotNum >= header->numSlots) {
+        PF_UnfixPage(fh->pfFileDesc, pageNum, FALSE);
         return RME_INVALIDRID;
     }
 
-    SlotEntry *slot = GET_SLOT(pageData, rid->slotNum);
+    SlotEntry *slot = GET_SLOT(pageData, slotNum);
     if (slot->recordLength == SLOT_EMPTY) {
-        PF_UnfixPage(fh->pfFileDesc, rid->pageNum, FALSE);
+        PF_UnfixPage(fh->pfFileDesc, pageNum, FALSE);
         return RME_INVALIDRID; // Record was deleted
     }
 
-    // 3. Check if buffer is large enough
+    // 4. Check if buffer is large enough
     if (bufSize < slot->recordLength) {
-        PF_UnfixPage(fh->pfFileDesc, rid->pageNum, FALSE);
+        PF_UnfixPage(fh->pfFileDesc, pageNum, FALSE);
         return RME_BUFTOOSMALL;
     }
 
-    // 4. Copy data to output buffer
+    // 5. Copy data to output buffer
     memcpy(dataBuf, pageData + slot->recordOffset, slot->recordLength);
     *dataLength = slot->recordLength;
 
-    // 5. Unfix the page (not dirty)
-    if ((pf_err = PF_UnfixPage(fh->pfFileDesc, rid->pageNum, FALSE)) != PFE_OK) {
+    // 6. Unfix the page (not dirty)
+    if ((pf_err = PF_UnfixPage(fh->pfFileDesc, pageNum, FALSE)) != PFE_OK) {
         PF_PrintError("RM_GetRecord: PF_UnfixPage");
         return pf_err;
     }
@@ -314,8 +345,9 @@ int RM_GetNextRecord(RM_ScanHandle *sh, RID *rid, char *dataBuf, int bufSize, in
                 // Copy data
                 memcpy(dataBuf, sh->pageData + slot->recordOffset, slot->recordLength);
                 *dataLength = slot->recordLength;
-                rid->pageNum = sh->currentPage;
-                rid->slotNum = sh->currentSlot;
+                
+                // Set the output RID (PACKED)
+                *rid = RM_PackRID(sh->currentPage, sh->currentSlot);
                 
                 return RME_OK; // Success!
             }
@@ -337,5 +369,5 @@ int RM_CloseScan(RM_ScanHandle *sh) {
         }
         sh->pageData = NULL;
     }
-    return RME_OK;
+    return RME_OK; /* RKE_OK might be a typo, should be RME_OK */
 }

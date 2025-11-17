@@ -6,14 +6,12 @@
 #include "pf.h" // We are built on top of the PF layer
 
 /*
- * RID: Record ID
- * A unique identifier for a record, consisting of a page number
- * and a slot number within that page.
+ * RID: Record ID (PACKED)
+ * We pack (pageNum, slotNum) into a single 32-bit integer.
+ * Upper 16 bits = pageNum
+ * Lower 16 bits = slotNum
  */
-typedef struct {
-    int pageNum;
-    int slotNum;
-} RID;
+typedef int RID;
 
 /*
  * RM_FileHandle: File Handle
@@ -44,28 +42,38 @@ typedef struct {
 #define RME_ERROR     -99 /* A generic error */
 
 
+/* --- Helper Functions for Packed RID --- */
+
+/*
+ * RM_PackRID
+ * Desc: Packs a (pageNum, slotNum) pair into a single int RID.
+ */
+RID RM_PackRID(int pageNum, int slotNum);
+
+/*
+ * RM_UnpackRID
+ * Desc: Unpacks a single int RID into its (pageNum, slotNum) pair.
+ */
+void RM_UnpackRID(RID rid, int *pageNum, int *slotNum);
+
+
 /* --- File Management --- */
 
 /*
  * RM_CreateFile
  * Desc: Creates a new paged file for the record manager.
- * (Just a wrapper for PF_CreateFile)
  */
 int RM_CreateFile(char *fileName);
 
 /*
  * RM_DestroyFile
  * Desc: Destroys an existing RM file.
- * (Just a wrapper for PF_DestroyFile)
  */
 int RM_DestroyFile(char *fileName);
 
 /*
  * RM_OpenFile
  * Desc: Opens an RM file.
- * Params: (char*) fileName - name of file to open
- * (PF_Strategy) strategy - buffer replacement strategy
- * (RM_FileHandle*) fh - (out) file handle
  * Returns: RME_OK or a PF error code
  */
 int RM_OpenFile(char *fileName, PF_Strategy strategy, RM_FileHandle *fh);
@@ -83,10 +91,7 @@ int RM_CloseFile(RM_FileHandle *fh);
 /*
  * RM_InsertRecord
  * Desc: Inserts a new record into the file.
- * Params: (RM_FileHandle*) fh - file handle
- * (char*) data - pointer to the record data
- * (int) dataLength - length of the record data
- * (RID*) rid - (out) the RID of the new record
+ * Params: (RID*) rid - (out) the RID of the new record (as a single int)
  * Returns: RME_OK or an error code
  */
 int RM_InsertRecord(RM_FileHandle *fh, char *data, int dataLength, RID *rid);
@@ -94,23 +99,18 @@ int RM_InsertRecord(RM_FileHandle *fh, char *data, int dataLength, RID *rid);
 /*
  * RM_DeleteRecord
  * Desc: Deletes a record from the file.
- * Params: (RM_FileHandle*) fh - file handle
- * (RID*) rid - the RID of the record to delete
+ * Params: (RID) rid - the RID of the record to delete
  * Returns: RME_OK or an error code
  */
-int RM_DeleteRecord(RM_FileHandle *fh, RID *rid);
+int RM_DeleteRecord(RM_FileHandle *fh, RID rid);
 
 /*
  * RM_GetRecord
  * Desc: Retrieves a single record from the file.
- * Params: (RM_FileHandle*) fh - file handle
- * (RID*) rid - the RID of the record to retrieve
- * (char*) dataBuf - (out) buffer to copy record data into
- * (int) bufSize - size of the dataBuf
- * (int*) dataLength - (out) actual length of the record
+ * Params: (RID) rid - the RID of the record to retrieve
  * Returns: RME_OK, RME_BUFTOOSMALL, or an error code
  */
-int RM_GetRecord(RM_FileHandle *fh, RID *rid, char *dataBuf, int bufSize, int *dataLength);
+int RM_GetRecord(RM_FileHandle *fh, RID rid, char *dataBuf, int bufSize, int *dataLength);
 
 
 /* --- Scanning --- */
@@ -118,8 +118,6 @@ int RM_GetRecord(RM_FileHandle *fh, RID *rid, char *dataBuf, int bufSize, int *d
 /*
  * RM_OpenScan
  * Desc: Initializes a new scan on the file.
- * Params: (RM_FileHandle*) fh - file handle
- * (RM_ScanHandle*) sh - (out) scan handle
  * Returns: RME_OK or an error code
  */
 int RM_OpenScan(RM_FileHandle *fh, RM_ScanHandle *sh);
@@ -127,11 +125,7 @@ int RM_OpenScan(RM_FileHandle *fh, RM_ScanHandle *sh);
 /*
  * RM_GetNextRecord
  * Desc: Retrieves the next record in the scan.
- * Params: (RM_ScanHandle*) sh - scan handle
- * (RID*) rid - (out) RID of the next record
- * (char*) dataBuf - (out) buffer for record data
- * (int) bufSize - size of dataBuf
- * (int*) dataLength - (out) actual length of record
+ * Params: (RID*) rid - (out) RID of the next record
  * Returns: RME_OK (success), RME_EOF (no more records), or an error
  */
 int RM_GetNextRecord(RM_ScanHandle *sh, RID *rid, char *dataBuf, int bufSize, int *dataLength);

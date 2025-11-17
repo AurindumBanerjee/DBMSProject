@@ -18,7 +18,7 @@ int testval;
 
 	/* init */
 	printf("initializing\n");
-	PF_Init();
+	PF_Init(50);
 
 	/* create index */
 	printf("creating index\n");
@@ -27,7 +27,7 @@ int testval;
 	/* open the index */
 	printf("opening index\n");
 	sprintf(fname,"%s.0",RELNAME);
-	fd = PF_OpenFile(fname);
+	fd = PF_OpenFile(fname,PF_MRU);
 
 	/* first, make sure that simple deletions work */
 	printf("inserting into index\n");

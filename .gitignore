@@ -1,0 +1,18 @@
+# Object files
+*.o
+
+# Executables
+ToyDB/pflayer/testpf
+ToyDB/pflayer/testhash
+ToyDB/pflayer/testpf_seq
+ToyDB/rmlayer/test_rm
+ToyDB/amlayer/test_am3
+a.out
+
+# Database files
+*.db
+
+# Other
+*~
+.DS_Store
+pflayer.o
