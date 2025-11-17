@@ -137,13 +137,13 @@ static int PFbufInternalAlloc(PFbpage **bpage, int (*writefcn)(int, int, PFfpage
 		*bpage = tbpage;
 	}
 
-
-	if (PFftab[fd].strategy == PF_LRU) {
-		PFbufLinkHead(*bpage);
-	} else {
-		PFbufLinkTail(*bpage);
-	}
-
+    /*
+     * *******************************************************************
+     * FINAL FIX: A new page brought in from disk is ALWAYS the
+     * "Most Recently Used" and must ALWAYS be linked to the head.
+     * *******************************************************************
+     */
+	PFbufLinkHead(*bpage);
 	return(PFE_OK);
 }
 
@@ -204,11 +204,8 @@ int PFbufGet(int fd, int pagenum, PFfpage **fpage,
 	}
 
     /*
-     * *******************************************************************
-     * NO RE-LINKING HERE. This was the bug.
-     * The page's position in the list is NOT updated until PFbufUnfix
-     * is called.
-     * *******************************************************************
+     * Page's position is NOT updated here.
+     * It is only updated when PFbufUnfix is called.
      */
 
 	/* Fix the page in the buffer then return*/
@@ -253,7 +250,9 @@ int PFbufUnfix(int fd, int pagenum, int dirty)
 
     if (strategy == PF_LRU) {
 	    PFbufLinkHead(bpage);
-    } else { /* strategy == PF_MRU */
+    } 
+	
+	else { /* strategy == PF_MRU */
         PFbufLinkTail(bpage);
     }
 
@@ -348,12 +347,10 @@ int PFbufUsed(int fd, int pagenum)
 	bpage->dirty = TRUE;
 
     /*
-     * *******************************************************************
-     * NO RE-LINKING HERE. This was the other part of the bug.
+     * NO RE-LINKING HERE.
      * This function is called by PF_AllocPage, which just needs
      * to mark the page dirty. The page is already at the
      * head of the list from PFbufInternalAlloc.
-     * *******************************************************************
      */
 
 	return(PFE_OK);
