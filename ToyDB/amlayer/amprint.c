@@ -1,8 +1,14 @@
 # include <stdio.h>
+/* ADDED includes */
+# include <stdlib.h>
+# include <string.h>
+# include "pftypes.h"
+/* END ADDED */
 # include "am.h"
 # include "pf.h"
 
-AM_PrintIntNode(pageBuf,attrType)
+/* ADDED void return type */
+void AM_PrintIntNode(pageBuf,attrType)
 char *pageBuf;
 char attrType;
 {
@@ -31,7 +37,8 @@ for(i = 1 ; i <= (header->numKeys);i++)
 }
 
 
-AM_PrintLeafNode(pageBuf,attrType)
+/* ADDED void return type */
+void AM_PrintLeafNode(pageBuf,attrType)
 char *pageBuf;
 char attrType;
 
@@ -71,7 +78,8 @@ for (i = 1; i <= header->numKeys; i++)
   }
 }
 
-AM_DumpLeafPages(fileDesc,min,attrType,attrLength)
+/* ADDED int return type */
+int AM_DumpLeafPages(fileDesc,min,attrType,attrLength)
 int fileDesc;
 int min;
 int attrLength;
@@ -82,17 +90,19 @@ char attrType;
 int pageNum;
 char *value;
 char *pageBuf;
-int index;
+/* int index; */ /* REMOVED - Unused variable */
 int errVal;
 AM_LEAFHEADER *header;
 
 
 value = malloc(AM_si);
-bcopy(&min,value,AM_si);
+bcopy((char*)&min,value,AM_si); /* ADDED (char*) cast */
 printf("%d PAGE \n",AM_LeftPageNum);
 PF_GetThisPage(fileDesc,AM_LeftPageNum,&pageBuf);
 header = (AM_LEAFHEADER *) calloc(1,AM_sl);
 bcopy(pageBuf,header,AM_sl);
+/* ADDED: pageNum = AM_LeftPageNum; */
+pageNum = AM_LeftPageNum; 
 while(header->nextLeafPage != -1)
   {
    printf("PAGENUMBER = %d\n",pageNum);   
@@ -108,11 +118,14 @@ printf("PAGENUMBER = %d\n",pageNum);
 AM_PrintLeafKeys(pageBuf,attrType);
 errVal = PF_UnfixPage(fileDesc,pageNum,FALSE);
 AM_Check;
+free(value); /* ADDED free */
+return(AME_OK); /* ADDED return */
 }
 
 
 
-AM_PrintLeafKeys(pageBuf,attrType)
+/* ADDED void return type */
+void AM_PrintLeafKeys(pageBuf,attrType)
 char *pageBuf;
 char attrType;
 
@@ -142,7 +155,8 @@ for (i = 1; i <= header->numKeys; i++)
 }
 
 
-AM_PrintAttr(bufPtr,attrType,attrLength)
+/* ADDED void return type */
+void AM_PrintAttr(bufPtr,attrType,attrLength)
 char *bufPtr;
 char attrType;
 int attrLength;
@@ -161,13 +175,15 @@ switch(attrType)
               }
    case 'f' : {
                bcopy(bufPtr,(char *)&buffloat,AM_sf);
-               printf("ATTRIBUTE is %d\n",buffloat);
+               /* --- MODIFIED --- Changed %d to %f */
+               printf("ATTRIBUTE is %f\n",buffloat);
                break;
               }
    case 'c' : {
 	       bufstr = malloc((unsigned) (attrLength + 1));
                bcopy(bufPtr,bufstr,attrLength);
-               bufstr[attrLength] = '/0';
+               /* --- MODIFIED --- Changed '/0' to '\0' */
+               bufstr[attrLength] = '\0';
                printf("ATTRIBUTE is %s\n",bufstr);
                free(bufstr);
 	       break;
@@ -176,14 +192,15 @@ switch(attrType)
 }
 
 
-AM_PrintTree(fileDesc,pageNum,attrType)
+/* ADDED void return type */
+void AM_PrintTree(fileDesc,pageNum,attrType)
 int pageNum;
 int fileDesc;
 char attrType;
 
 {
 int nextPage;
-int errVal;
+/* int errVal; */ /* REMOVED - Unused variable */
 AM_INTHEADER *header;
 char *tempPage;
 char *pageBuf;
@@ -191,14 +208,17 @@ int recSize;
 int i;
 
 printf("GETTING PAGE = %d\n",pageNum);
-errVal = PF_GetThisPage(fileDesc,pageNum,&pageBuf);
+/* errVal = */ PF_GetThisPage(fileDesc,pageNum,&pageBuf);
 tempPage = malloc(PF_PAGE_SIZE);
 bcopy(pageBuf,tempPage,PF_PAGE_SIZE);
-errVal = PF_UnfixPage(fileDesc,pageNum,FALSE);
+/* errVal = */ PF_UnfixPage(fileDesc,pageNum,FALSE);
 if (*tempPage == 'l')
   {
    printf("PAGENUM = %d\n",pageNum);
    AM_PrintLeafKeys(tempPage,attrType);
+   /* ADDED free */
+   free(tempPage);
+   free(header);
    return;
   }
 header = (AM_INTHEADER *)calloc(1,AM_sint);
@@ -211,5 +231,6 @@ for(i = 1; i <= (header->numKeys + 1); i++)
   }
 printf("PAGENUM = %d",pageNum);
 AM_PrintIntNode(tempPage,attrType);
+/* ADDED free */
+free(tempPage);
 }
-

@@ -1,11 +1,17 @@
 # include <stdio.h>
+/* ADDED includes */
+#include <string.h>
+#include <stdlib.h>
+#include "pftypes.h"
+/* END ADDED includes */
 # include "pf.h"
 # include "am.h"
 
 
 
 /* Creates a secondary idex file called fileName.indexNo */
-AM_CreateIndex(fileName,indexNo,attrType,attrLength)
+/* ADDED int return type */
+int AM_CreateIndex(fileName,indexNo,attrType,attrLength)
 char *fileName;/* Name of indexed file */
 int indexNo;/*number of this index for file */
 char attrType;/* 'c' for char ,'i' for int ,'f' for float */
@@ -50,7 +56,8 @@ int attrLength; /* 4 for 'i' or 'f', 1-255 for 'c' */
 	AM_Check;
 
 	/* open the new file */
-	fileDesc = PF_OpenFile(indexfName);
+    /* --- MODIFIED --- Added PF_LRU strategy */
+	fileDesc = PF_OpenFile(indexfName, PF_LRU);
 	if (fileDesc < 0) 
 	  {
 	   AM_Errno = AME_PF;
@@ -93,7 +100,8 @@ int attrLength; /* 4 for 'i' or 'f', 1-255 for 'c' */
 
 
 /* Destroys the index fileName.indexNo */
-AM_DestroyIndex(fileName,indexNo)
+/* ADDED int return type */
+int AM_DestroyIndex(fileName,indexNo)
 char *fileName;/* name of indexed file */
 int indexNo; /* number of this index for file */
 
@@ -110,7 +118,8 @@ int indexNo; /* number of this index for file */
 
 /* Deletes the recId from the list for value and deletes value if list
 becomes empty */
-AM_DeleteEntry(fileDesc,attrType,attrLength,value,recId)
+/* ADDED int return type */
+int AM_DeleteEntry(fileDesc,attrType,attrLength,value,recId)
 int fileDesc; /* file Descriptor */
 char attrType; /* 'c' , 'i' or 'f' */
 int attrLength; /* 4 for 'i' or 'f' , 1-255 for 'c' */
@@ -129,8 +138,7 @@ int recId; /* id of the record to delete */
 	AM_LEAFHEADER head,*header;/* header of the page */
 	int recSize; /* length of key,ptr pair for a leaf */
 	int tempRec; /* holds the recId of the current record */
-	int errVal; /* holds the return value of functions called within 
-				                            this function */
+	/* int errVal; */ /* holds the return value of functions called within - REMOVED, was unused */
 	int i; /* loop index */
 
 
@@ -226,7 +234,7 @@ int recId; /* id of the record to delete */
 	/* copy the header onto the buffer */
 	bcopy(header,pageBuf,AM_sl);
 	
-	errVal = PF_UnfixPage(fileDesc,pageNum,TRUE);
+	/* errVal = */ PF_UnfixPage(fileDesc,pageNum,TRUE); /* Removed errVal */
 	
 	/* empty the stack so that it is set for next amlayer call */
 	AM_EmptyStack();
@@ -244,7 +252,8 @@ int recId; /* id of the record to delete */
 
 
 /* Inserts a value,recId pair into the tree */
-AM_InsertEntry(fileDesc,attrType,attrLength,value,recId)
+/* ADDED int return type */
+int AM_InsertEntry(fileDesc,attrType,attrLength,value,recId)
 int fileDesc; /* file Descriptor */
 char attrType; /* 'i' or 'c' or 'f' */
 int attrLength; /* 4 for 'i' or 'f', 1-255 for 'c' */
@@ -370,7 +379,8 @@ static char *AMerrormsg[] = {
 };
 
 
-AM_PrintError(s)
+/* ADDED void return type */
+void AM_PrintError(s)
 char *s;
 
 {
@@ -382,4 +392,3 @@ char *s;
    else 
      fprintf(stderr,"\n");
 }
-

@@ -1,10 +1,25 @@
 /* pf.h: externs and error codes for Paged File Interface*/
+
+/* ADDED include guard */
+#ifndef PF_H
+#define PF_H
+
 #ifndef TRUE
 #define TRUE 1		
 #endif
 #ifndef FALSE
 #define FALSE 0
 #endif
+
+/*
+ * ADDED: PF_Strategy enum definition
+ * This was missing and caused the first error.
+ */
+typedef enum {
+    PF_LRU,
+    PF_MRU
+} PF_Strategy;
+
 
 /************** Error Codes *********************************/
 #define PFE_OK		0	/* OK */
@@ -36,5 +51,29 @@
 
 /* externs from the PF layer */
 extern int PFerrno;		/* error number of last error */
-extern void PF_Init();
-extern void PF_PrintError();
+/* --- MODIFIED --- Corrected prototype to match pf.c */
+extern void PF_PrintError(char *);
+
+/* ADDED: Missing function prototypes */
+extern void PF_Init(int); /* Changed to void */
+extern int PF_CreateFile(char *);
+extern int PF_DestroyFile(char *);
+extern int PF_OpenFile(char *, PF_Strategy);
+extern int PF_CloseFile(int);
+extern int PF_GetFirstPage(int, int *, char **);
+extern int PF_GetNextPage(int, int *, char **);
+extern int PF_GetThisPage(int, int, char **);
+extern int PF_AllocPage(int, int *, char **);
+extern int PF_DisposePage(int, int);
+extern int PF_UnfixPage(int, int, int);
+extern int PF_MarkDirty(int, int);
+
+/* Statistics functions */
+extern void PF_ResetStats();
+extern long PF_GetLogicalIOs();
+extern long PF_GetPhysicalIOs();
+extern long PF_GetDiskReads();
+extern long PF_GetDiskWrites();
+
+
+#endif /* PF_H */
