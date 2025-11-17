@@ -1,9 +1,11 @@
 # include <stdio.h>
+# include <string.h> /* ADDED for bcopy */
 # include "am.h"
 # include "pf.h"
 
 /* Inserts a key into a leaf node */
-AM_InsertintoLeaf(pageBuf,attrLength,value,recId,index,status)
+/* ADDED int return type */
+int AM_InsertintoLeaf(pageBuf,attrLength,value,recId,index,status)
 char *pageBuf;/* buffer where the leaf page resides */
 int attrLength;
 char *value;/* attribute value to be inserted*/
@@ -15,7 +17,7 @@ int status;/* Whether key is a new key or an old key */
 	int recSize;
 	char tempPage[PF_PAGE_SIZE];
 	AM_LEAFHEADER head,*header;
-	int errVal;
+	/* int errVal; */ /* REMOVED - Unused variable */
 
 
 	/* initialise the header */
@@ -82,7 +84,8 @@ int status;/* Whether key is a new key or an old key */
 
 
 /* Insert into leaf given the fact that the key is old */
-AM_InsertToLeafFound(pageBuf,recId,index,header)
+/* ADDED void return type */
+void AM_InsertToLeafFound(pageBuf,recId,index,header)
 char *pageBuf;
 int recId;
 int index;
@@ -124,7 +127,8 @@ AM_LEAFHEADER *header;
 
 
 /* Insert to a leaf given that the key is new */
-AM_InsertToLeafNotFound(pageBuf,value,recId,index,header)
+/* ADDED void return type */
+void AM_InsertToLeafNotFound(pageBuf,value,recId,index,header)
 char *pageBuf;
 char *value;
 int recId;
@@ -160,8 +164,8 @@ AM_LEAFHEADER *header;
 /* There may be quite a few entries in the freelist but there may not 
 be space in the middle for a new key. This compacts all the recid's to the right
 so that there is enough space in the middle */
-AM_Compact(low,high,pageBuf,tempPage,header)
-
+/* ADDED void return type */
+void AM_Compact(low,high,pageBuf,tempPage,header)
 int low;
 int high;
 char *pageBuf;
@@ -182,6 +186,9 @@ AM_LEAFHEADER *header;
 	
 	recSize = header->attrLength + AM_ss;
 	recIdPtr = PF_PAGE_SIZE - AM_si - AM_ss ;
+
+    /* Initialize offset2 to avoid potential uninitialized use */
+    offset2 = (0 - 1) * recSize + AM_sl; 
 
 	for (i = low, j = 1; i <= high; i++,j++)
 	{
@@ -218,4 +225,3 @@ AM_LEAFHEADER *header;
 	bcopy(tempheader,tempPage,AM_sl);
 
 }
-

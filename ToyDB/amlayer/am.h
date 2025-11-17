@@ -1,3 +1,7 @@
+/* am.h: MODIFIED FOR MODERN COMPILER */
+#include <stdlib.h> /* For malloc/calloc */
+#include <string.h> /* For bcopy/memcpy */
+
 typedef struct am_leafheader
 	{
 		char pageType;
@@ -22,8 +26,11 @@ typedef struct am_intheader
 extern int AM_RootPageNum; /* The page number of the root */
 extern int AM_LeftPageNum; /* The page Number of the leftmost leaf */
 extern int AM_Errno; /* last error in AM layer */
-extern char *calloc();
-extern char *malloc();
+
+/* * REMOVED conflicting extern char *calloc();
+ * REMOVED conflicting extern char *malloc();
+ * <stdlib.h> now provides these.
+ */
 
 # define AM_Check if (errVal != PFE_OK) {AM_Errno = AME_PF; return(AME_PF) ;}
 # define AM_si sizeof(int)
@@ -66,3 +73,52 @@ extern char *malloc();
 # define AME_INVALIDATTRTYPE -9
 # define AME_FD -10
 # define AME_INVALIDVALUE -11
+
+
+/* --- ADDED FUNCTION PROTOTYPES --- */
+
+/* From am.c */
+int AM_SplitLeaf(int, char *, int *, int, int, char *, int, int, char *);
+int AM_AddtoParent(int, int, char *, int);
+void AM_AddtoIntPage(char *, char *, int, AM_INTHEADER *, int);
+void AM_FillRootPage(char *, int, int, char *, short, short);
+void AM_SplitIntNode(char *, char *, char *, AM_INTHEADER *, char *, int, int);
+
+/* From amfns.c */
+int AM_CreateIndex(char *, int, char, int);
+int AM_DestroyIndex(char *, int);
+int AM_DeleteEntry(int, char, int, char *, int);
+int AM_InsertEntry(int, char, int, char *, int);
+void AM_PrintError(char *);
+
+/* From aminsert.c */
+int AM_InsertintoLeaf(char *, int, char *, int, int, int);
+void AM_InsertToLeafFound(char *, int, int, AM_LEAFHEADER *);
+void AM_InsertToLeafNotFound(char *, char *, int, int, AM_LEAFHEADER *);
+void AM_Compact(int, int, char *, char *, AM_LEAFHEADER *);
+
+void AM_PrintIntNode(char *, char);
+void AM_PrintLeafNode(char *, char);
+/* --- MODIFIED --- Changed return type to int */
+int AM_DumpLeafPages(int, int, char, int);
+void AM_PrintLeafKeys(char *, char);
+void AM_PrintAttr(char *, char, int);
+void AM_PrintTree(int, int, char);
+
+/* From amscan.c */
+int AM_OpenIndexScan(int, char, int, int, char *);
+int AM_FindNextEntry(int);
+int AM_CloseIndexScan(int);
+int GetLeftPageNum(int);
+
+/* From amsearch.c */
+int AM_Search(int, char, int, char *, int *, char **, int *);
+int AM_BinSearch(char *, char, int, char *, int *, AM_INTHEADER *);
+int AM_SearchLeaf(char *, char, int, char *, int *, AM_LEAFHEADER *);
+int AM_Compare(char *, char, int, char *);
+
+/* From amstack.c */
+void AM_PushStack(int, int);
+void AM_PopStack(void);
+void AM_topofStack(int *, int *);
+void AM_EmptyStack(void);

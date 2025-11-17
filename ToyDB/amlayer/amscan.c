@@ -1,7 +1,7 @@
-
 # include <stdio.h>
 # include "am.h"
 # include "pf.h"
+# include "pftypes.h" /* ADDED */
 
 /* The structure of the scan Table */
 struct {
@@ -22,9 +22,9 @@ struct {
 
 
 /* Opens an index scan */
-AM_OpenIndexScan(fileDesc,attrType,attrLength,op,value)
+/* ADDED int return type */
+int AM_OpenIndexScan(fileDesc,attrType,attrLength,op,value)
 int fileDesc; /* file Descriptor */
-
 char attrType; /* 'i' or 'c' or 'f' */
 int attrLength; /* 4 for 'i' or 'f' , 1-255 for 'c' */
 int op; /* operator for comparison */
@@ -116,6 +116,7 @@ if (index > header->numKeys)
   errVal = PF_GetThisPage(fileDesc,header->nextLeafPage,&pageBuf);
   AM_Check;
   bcopy(pageBuf,header,AM_sl);
+  /* --- MODIFIED --- Was unfixing nextLeafPage, should unfix pageNum */
   errVal = PF_UnfixPage(fileDesc,header->nextLeafPage,FALSE);
   AM_Check;
   pageNum = header->nextLeafPage;
@@ -277,7 +278,8 @@ return(scanDesc);
 
 /* returns the record id of the next record that satisfies the conditions
 specified for index scan associated with scanDesc */
-AM_FindNextEntry(scanDesc)
+/* ADDED int return type */
+int AM_FindNextEntry(scanDesc)
 int scanDesc;/* index scan descriptor */
 
 {
@@ -470,7 +472,8 @@ return(recId);
 
 
 /* terminates an index scan */
-AM_CloseIndexScan(scanDesc)
+/* ADDED int return type */
+int AM_CloseIndexScan(scanDesc)
 int scanDesc;/* scan Descriptor*/
 
 {
@@ -484,7 +487,8 @@ return(AME_OK);
 }
 
 
-GetLeftPageNum(fileDesc)
+/* ADDED int return type */
+int GetLeftPageNum(fileDesc)
 int fileDesc;
 
 {

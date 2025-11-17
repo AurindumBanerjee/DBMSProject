@@ -12,7 +12,8 @@ struct
 
 int AM_topofStackPtr = -1;
 
-AM_PushStack(pageNum,offset)
+/* ADDED void return type */
+void AM_PushStack(pageNum,offset)
 int pageNum;
 int offset;
 
@@ -22,13 +23,15 @@ AM_Stack[AM_topofStackPtr].pageNumber  = pageNum;
 AM_Stack[AM_topofStackPtr].offset  = offset;
 }
 
-AM_PopStack()
+/* ADDED void return type */
+void AM_PopStack()
 
 {
 AM_topofStackPtr--;
 }
 
-AM_topofStack(pageNum,offset)
+/* ADDED void return type */
+void AM_topofStack(pageNum,offset)
 int *pageNum;
 int *offset;
 {
@@ -36,9 +39,9 @@ int *offset;
 *offset = AM_Stack[AM_topofStackPtr].offset ;
 }
 
-AM_EmptyStack()
+/* ADDED void return type */
+void AM_EmptyStack()
 
 {
 AM_topofStackPtr = -1;
 }
-

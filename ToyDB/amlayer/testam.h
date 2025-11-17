@@ -11,7 +11,7 @@ typedef int RecIdType;		/* type for recid */
 #define IntToRecId(intval)	(intval) /* converts int to record id */
 
 /*
- *  Attribute types
+ * Attribute types
  */
 #define CHAR_TYPE  'c'
 #define INT_TYPE   'i'
@@ -20,7 +20,7 @@ typedef int RecIdType;		/* type for recid */
 #define FLOAT_SIZE sizeof(float)
 
 /*
- *  Compare operators
+ * Compare operators
  */
 #define EQ_OP	1
 #define LT_OP	2
@@ -43,4 +43,5 @@ typedef struct smallrec {
 /* successor function, assuming ch is a character */
 #define succ(ch) ((char)((int)(ch)+1))
 
-extern RecIdType xAM_FindNextEntry();
+/* --- MODIFIED --- Added (int) parameter to prototype */
+extern RecIdType xAM_FindNextEntry(int);
