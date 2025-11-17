@@ -16,9 +16,9 @@
 /* --- Test Configuration --- */
 #define TEST_FILENAME "pf_testfile_seq"
 #define BUFFER_SIZE 20   /* The buffer pool size to initialize */
-#define NUM_PAGES 50     /* File size (must be > BUFFER_SIZE to test eviction) */
+#define NUM_PAGES 32     /* File size (must be > BUFFER_SIZE to test eviction) */
 #define WORKLOAD_SIZE 5000 /* Total number of read/write operations */
-#define STRATEGY PF_MRU /* PF_LRU or PF_MRU */
+#define STRATEGY PF_LRU /* PF_LRU or PF_MRU */
 
 
 /*
@@ -85,13 +85,9 @@ int main(int argc, char **argv)
     /* Reset statistics counters to zero */
     PF_ResetStats();
 
-    for (i = 0; i < WORKLOAD_SIZE; i++)
-    {
-        /*
-         * **********************************************************
-         * KEY CHANGE: Access pages sequentially (0, 1, ... 49, 0, ...)
-         * **********************************************************
-         */
+    for (i = 0; i < WORKLOAD_SIZE; i++) {
+        
+        // CHANGE: Access pages sequentially (0, 1, ... 49, 0, ...)
         pagenum = i % NUM_PAGES;
         
         /* Decide whether to read or write */

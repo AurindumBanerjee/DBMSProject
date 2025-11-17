@@ -24,7 +24,7 @@ def run_test(read_ratio, write_ratio):
 
 # Function to simulate different read/write mixtures and collect statistics
 def collect_statistics():
-    read_ratios = np.linspace(0, 100, 11)  # Read ratios from 0% to 100% in steps of 10%
+    read_ratios = np.linspace(0, 100, 5)  # Read ratios from 0% to 100% in steps of 10%
     write_ratios = 100 - read_ratios       # Corresponding write ratios
 
     stats = {
@@ -69,7 +69,7 @@ def plot_graph(stats):
 
 
     # Add a label to show strategy used, Random Access
-    plt.text(0.5, 0.95, "Strategy: Random Access", horizontalalignment='center', verticalalignment='center', transform=plt.gca().transAxes, fontsize=12, bbox=dict(facecolor='white', alpha=0.5))
+    plt.text(0.5, 0.95, "Strategy: LRU Random Access", horizontalalignment='center', verticalalignment='center', transform=plt.gca().transAxes, fontsize=12, bbox=dict(facecolor='white', alpha=0.5))
 
     plt.xlabel("Read Ratio (%)")
     plt.ylabel("I/O Counts")

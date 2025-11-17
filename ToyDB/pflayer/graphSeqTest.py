@@ -24,7 +24,8 @@ def run_test(read_ratio, write_ratio):
 
 # Function to simulate different read/write mixtures and collect statistics
 def collect_statistics():
-    read_ratios = np.linspace(0, 100, 11)  # Read ratios from 0% to 100% in steps of 10%
+
+    read_ratios = np.linspace(0, 100, 5)  # Read ratios from 0% to 100% in steps of 1%
     write_ratios = 100 - read_ratios       # Corresponding write ratios
 
     stats = {
@@ -67,7 +68,7 @@ def plot_graph(stats):
     # Plot Disk Writes
     plt.plot(read_ratios, disk_writes, label="Disk Writes", marker="o")
 
-    plt.text(0.5, 0.95, "Strategy: Sequential Access", horizontalalignment='center', verticalalignment='center', transform=plt.gca().transAxes, fontsize=12, bbox=dict(facecolor='white', alpha=0.5))
+    plt.text(0.5, 0.95, "Strategy: LRU Sequential Access", horizontalalignment='center', verticalalignment='center', transform=plt.gca().transAxes, fontsize=12, bbox=dict(facecolor='white', alpha=0.5))
 
 
     plt.xlabel("Read Ratio (%)")
