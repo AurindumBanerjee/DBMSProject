@@ -7,7 +7,7 @@
 
 ---
 
-This project implements and evaluates several enhancements across three layers of the ToyDB system:
+We implemented several enhancements across three layers of the ToyDB system:
 1. **Paged File Layer (PF)**
 2. **Record Management Layer (RM)**
 3. **Access Method Layer (AM)**
@@ -16,7 +16,7 @@ Each objective is implemented, tested, and evaluated with performance graphs and
 
 ---
 
-# Objective 1 — Page Buffering (PF Layer)
+# Objective 1 - Page Buffering (PF Layer)
 
 ## ✔ Description
 
@@ -51,15 +51,13 @@ These graphs show:
   - **LRU performs poorly**, repeatedly evicting pages needed next  
   - **MRU performs optimally**, keeping older pages in memory → *dramatically fewer reads*  
 
-This confirms that your PF layer implementation is **correct**.
-
 ---
 
-#Objective 2 — Variable-Length Records (RM Layer)
+# Objective 2 - Variable-Length Records (RM Layer)
 
 ## ✔ Description
 
-You implemented a **slotted-page layout** to store variable-length records efficiently:
+In this, we implemented a **slotted-page layout** to store variable-length records efficiently:
 
 - Supports insertion, deletion, and scanning
 - Measures **space utilization**
@@ -73,17 +71,16 @@ You implemented a **slotted-page layout** to store variable-length records effic
 
 Findings:
 
-- **Slotted page** achieves the *best space efficiency*
-- Static layouts waste space as maximum record size increases  
-- Matches expected textbook results for variable-length record storage
+- **Slotted page** achieved the *worst space efficiency* in our implementation.
+- Static layouts waste space as maximum record size increased  .  
 
 ---
 
-# Objective 3 — B+ Tree Index Construction (AM Layer)
+# Objective 3 - B+ Tree Index Construction (AM Layer)
 
 ## ✔ Description
 
-You implemented and compared three index build strategies:
+We implemented and compared three index build strategies:
 
 1. **Incremental Load**
 2. **Bulk Load (Unsorted)**
@@ -103,9 +100,8 @@ Evaluation metrics:
 Summary:
 
 - Incremental and unsorted bulk load produce higher physical I/O
-- **Optimized sorted bulk load** is *vastly superior*:  
+- **Optimized sorted bulk load** is *better*:  
   - Lowest I/O  
   - Fastest runtime  
-  - Follows the optimal B+ Tree build strategy taught in DBMS courses
 
 
