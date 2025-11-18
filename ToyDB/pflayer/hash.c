@@ -8,8 +8,6 @@ a file descriptor and a page number */
 /* hash table */
 static PFhash_entry *PFhashtbl[PF_HASH_TBL_SIZE];
 
-/* extern char *malloc(); --- This is obsolete, replaced by <stdlib.h> */
-
 void PFhashInit()
 /****************************************************************************
 SPECIFICATIONS:

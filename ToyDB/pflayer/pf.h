@@ -38,7 +38,7 @@
 /* page size */
 #define PF_PAGE_SIZE	4096
 
-/* Replacement Strategy Enum */
+// Replacement Strategy Enum 
 typedef enum { PF_LRU = 0, PF_MRU = 1 } PF_Strategy;
 
 /* externs from the PF layer */

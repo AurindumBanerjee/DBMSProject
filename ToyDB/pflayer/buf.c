@@ -233,12 +233,6 @@ int PFbufUnfix(int fd, int pagenum, int dirty)
 	
 	bpage->fixed = FALSE;
 	
-    /*
-     Relink the page based on the strategy
-     - For LRU, unfixing moves it to the HEAD (it's now MRU).
-     - For MRU, unfixing moves it to the TAIL (it's now LRU, so it is protected from eviction).
-     */
-	
     strategy = PFftab[fd].strategy;
 	fprintf(stderr, "DEBUG: PF_OpenFile fd=%d strategy=%d (macro)\n", fd, PFftab[fd].strategy);
 
