@@ -170,63 +170,6 @@ extern int PF_DisposePage(int fd, int pagenum);
  */
 extern int PF_UnfixPage(int fd, int pagenum, int dirty);
 
-/*
- * PF_MarkDirty
- *
- * Desc: Explicitly mark a fixed page as dirty.
- * (Required by assignment objective 1)
- * Params: (int) fd - file descriptor.
- * (int) pagenum - page number to mark as dirty.
- * Returns: PFE_OK if success, or a PF error code otherwise.
- */
-extern int PF_MarkDirty(int fd, int pagenum);
-
-
-/************************************************************
- * Statistics Interface
- ************************************************************/
-
-/*
- * PF_ResetStats
- *
- * Desc: Reset all I/O statistics counters to zero.
- */
-extern void PF_ResetStats();
-
-/*
- * PF_GetLogicalIOs
- *
- * Desc: Get the total number of logical I/O requests
- * (requests to PF_GetThisPage, PF_GetFirstPage, etc.)
- * Returns: (long) The count of logical I/Os.
- */
-extern long PF_GetLogicalIOs();
-
-/*
- * PF_GetPhysicalIOs
- *
- * Desc: Get the total number of physical I/Os (reads + writes).
- * Returns: (long) The count of physical I/Os.
- */
-extern long PF_GetPhysicalIOs();
-
-/*
- * PF_GetDiskReads
- *
- * Desc: Get the total number of pages read from disk.
- * Returns: (long) The count of disk reads.
- */
-extern long PF_GetDiskReads();
-
-/*
- * PF_GetDiskWrites
- *
- * Desc: Get the total number of pages written to disk.
- * Returns: (long) The count of disk writes.
- */
-extern long PF_GetDiskWrites();
-
-
 /************************************************************
  * Error Handling
  ************************************************************/
@@ -238,5 +181,22 @@ extern long PF_GetDiskWrites();
  * Params: (char*) s - a prefix string to print.
  */
 extern void PF_PrintError(char *s);
+
+
+
+extern int PF_MarkDirty(int fd, int pagenum);
+
+extern void PF_ResetStats();
+
+extern long PF_GetLogicalIOs();
+
+extern long PF_GetPhysicalIOs();
+
+extern long PF_GetDiskReads();
+
+extern long PF_GetDiskWrites();
+
+
+
 
 #endif /* PF_H */
