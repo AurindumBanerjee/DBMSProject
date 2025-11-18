@@ -1,5 +1,3 @@
-/* pf.h: externs and error codes for Paged File Interface*/
-
 #ifndef PF_H
 #define PF_H
 

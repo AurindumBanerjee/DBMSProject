@@ -1,5 +1,3 @@
-/* hash.c: Functions to facilitate finding the buffer page given
-a file descriptor and a page number */
 #include <stdio.h>
 #include <stdlib.h> /* For malloc() and free() */
 #include "pf.h"

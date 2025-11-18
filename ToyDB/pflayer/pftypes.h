@@ -119,13 +119,14 @@ extern int PFbufReleaseFile(int fd, int (*writefcn)(int, int, PFfpage*));
 /* Mark a page as used (and dirty) */
 extern int PFbufUsed(int fd, int pagenum);
 
-/* Explicitly mark a fixed page as dirty */
-extern int PFbufMarkDirty(int fd, int pagenum);
-
 /* Print buffer contents (for debugging) */
 extern void PFbufPrint();
 
-/* Statistics functions */
+
+// Explicitly mark a fixed page as dirty
+extern int PFbufMarkDirty(int fd, int pagenum);
+
+// Statistics functions 
 extern void PFbufResetStats();
 extern long PFbufGetLogicalIOs();
 extern long PFbufGetPhysicalIOs();

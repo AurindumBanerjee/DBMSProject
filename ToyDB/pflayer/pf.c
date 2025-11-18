@@ -1,10 +1,9 @@
-/* pf.c: Paged File Interface Routines+ support routines */
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <sys/types.h>
 #include <fcntl.h>
-#include <unistd.h> /* For lseek, read, write, close, unlink */
+#include <unistd.h>
 #include "pf.h"
 #include "pftypes.h"
 
