@@ -572,55 +572,7 @@ SPECIFICATIONS:
 }
 
 
-int PF_MarkDirty(int fd, int pagenum)
-/****************************************************************************
-SPECIFICATIONS:
-    Explicitly mark a fixed page as dirty.
-*****************************************************************************/
-{
-    if (PFinvalidFd(fd)){
-		PFerrno = PFE_FD;
-		return(PFerrno);
-	}
 
-	if (PFinvalidPagenum(fd,pagenum)){
-		PFerrno = PFE_INVALIDPAGE;
-		return(PFerrno);
-	}
-
-    return(PFbufMarkDirty(fd, pagenum));
-}
-
-
-/****************************************************************************
- * Statistics Interface Functions
- * (These are just wrappers for the buffer manager's functions)
- ****************************************************************************/
-
-void PF_ResetStats()
-{
-    PFbufResetStats();
-}
-
-long PF_GetLogicalIOs()
-{
-    return PFbufGetLogicalIOs();
-}
-
-long PF_GetPhysicalIOs()
-{
-    return PFbufGetPhysicalIOs();
-}
-
-long PF_GetDiskReads()
-{
-    return PFbufGetDiskReads();
-}
-
-long PF_GetDiskWrites()
-{
-    return PFbufGetDiskWrites();
-}
 
 
 /****************************************************************************
@@ -677,4 +629,46 @@ SPECIFICATIONS:
 		perror(" ");
 	else	fprintf(stderr,"\n");
 
+}
+
+
+int PF_MarkDirty(int fd, int pagenum) {
+    
+	if (PFinvalidFd(fd)){
+		PFerrno = PFE_FD;
+		return(PFerrno);
+	}
+
+	if (PFinvalidPagenum(fd,pagenum)){
+		PFerrno = PFE_INVALIDPAGE;
+		return(PFerrno);
+	}
+
+    return(PFbufMarkDirty(fd, pagenum));
+}
+
+
+void PF_ResetStats()
+{
+    PFbufResetStats();
+}
+
+long PF_GetLogicalIOs()
+{
+    return PFbufGetLogicalIOs();
+}
+
+long PF_GetPhysicalIOs()
+{
+    return PFbufGetPhysicalIOs();
+}
+
+long PF_GetDiskReads()
+{
+    return PFbufGetDiskReads();
+}
+
+long PF_GetDiskWrites()
+{
+    return PFbufGetDiskWrites();
 }
