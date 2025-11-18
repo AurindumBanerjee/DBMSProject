@@ -1,7 +1,3 @@
-/* buf.c: buffer management routines. The interface routines are:
-PFbufGet(), PFbufUnfix(), PFbufAlloc(), PFbufReleaseFile(), PFbufUsed() and
-PFbufPrint() */
-
 #include <stdio.h>
 #include <stdlib.h> /* For malloc */
 #include "pf.h"
@@ -11,9 +7,9 @@ PFbufPrint() */
 static int PFnumbpage = 0;	/* # of buffer pages in memory */
 static int PF_MAX_BUFS;     /* Max # of buffers, set by PFbufInit */
 
-static PFbpage *PFfirstbpage= NULL;	/* ptr to first buffer page (MRU), or NULL */
-static PFbpage *PFlastbpage = NULL;	/* ptr to last buffer page (LRU), or NULL */
-static PFbpage *PFfreebpage= NULL;	/* list of free buffer pages */
+static PFbpage *PFfirstbpage= NULL;
+static PFbpage *PFlastbpage = NULL;
+static PFbpage *PFfreebpage= NULL;
 
 /* Statistics Counters */
 static long PF_logical_ios = 0;
@@ -48,15 +44,20 @@ static void PFbufLinkHead(PFbpage *bpage)
 }
 
 // New function to link a page at the tail (LRU position)
-static void PFbufLinkTail(PFbpage *bpage)
-{
+static void PFbufLinkTail(PFbpage *bpage) {
+
     bpage->nextpage = NULL;
-    bpage->prevpage = PFlastbpage;
-    if (PFlastbpage != NULL)
+    
+	bpage->prevpage = PFlastbpage;
+    
+	if (PFlastbpage != NULL)
         PFlastbpage->nextpage = bpage;
-    PFlastbpage = bpage;
-    if (PFfirstbpage == NULL)
+    
+	PFlastbpage = bpage;
+    
+	if (PFfirstbpage == NULL)
         PFfirstbpage = bpage;
+
 }
 	
 void PFbufUnlink(PFbpage *bpage)
@@ -79,9 +80,9 @@ void PFbufUnlink(PFbpage *bpage)
 
 static int PFbufInternalAlloc(PFbpage **bpage, int (*writefcn)(int, int, PFfpage*), int fd)
 {
-    PFbpage *tbpage;	/* temporary pointer to buffer page */
-    int error;		/* error value returned*/
-    PF_Strategy strategy; /* Replacement strategy */
+    PFbpage *tbpage;
+    int error;	
+    PF_Strategy strategy; 
 
 	if (PFfreebpage != NULL){
 		*bpage = PFfreebpage;
@@ -95,23 +96,24 @@ static int PFbufInternalAlloc(PFbpage **bpage, int (*writefcn)(int, int, PFfpage
 		}
 		PFnumbpage++;
 	}
+
 	else {
 		*bpage = NULL;		
         
-        /* Look up the strategy for the file requesting the page */
+        // Look up the strategy for the file requesting the page
         strategy = PFftab[fd].strategy;
 
         if (strategy == PF_LRU)
         {
-            /* LRU: Scan from the tail (Least Recently Used) backwards */
+            // LRU: Scan from the tail (Least Recently Used) backwards
             for (tbpage = PFlastbpage; tbpage != NULL; tbpage = tbpage->prevpage){
                 if (!tbpage->fixed)
                     break;
             }
         }
-        else /* strategy == PF_MRU */
+        else // strategy == PF_MRU
         {
-            /* MRU: Scan from the head (Most Recently Used) forwards */
+            // MRU: Scan from the head (Most Recently Used) forwards
             for (tbpage = PFfirstbpage; tbpage != NULL; tbpage = tbpage->nextpage){
                 if (!tbpage->fixed)
                     break;
@@ -140,7 +142,7 @@ static int PFbufInternalAlloc(PFbpage **bpage, int (*writefcn)(int, int, PFfpage
 	}
 
  
-    // Page at head is most recently use
+    // Page at head is most recently used
 	PFbufLinkHead(*bpage);
 	return(PFE_OK);
 }
@@ -232,13 +234,9 @@ int PFbufUnfix(int fd, int pagenum, int dirty)
 	bpage->fixed = FALSE;
 	
     /*
-     * *******************************************************************
-     * THIS IS THE MAIN STRATEGY LOGIC
-     * Relink the page based on the strategy
-     * - For LRU, unfixing moves it to the HEAD (it's now MRU).
-     * - For MRU, unfixing moves it to the TAIL (it's now LRU,
-     * so it is protected from eviction).
-     * *******************************************************************
+     Relink the page based on the strategy
+     - For LRU, unfixing moves it to the HEAD (it's now MRU).
+     - For MRU, unfixing moves it to the TAIL (it's now LRU, so it is protected from eviction).
      */
 	
     strategy = PFftab[fd].strategy;
@@ -246,14 +244,7 @@ int PFbufUnfix(int fd, int pagenum, int dirty)
 
     
 	PFbufUnlink(bpage);
-
-    if (strategy == PF_LRU) {
-	    PFbufLinkHead(bpage);
-    } 
-	
-	else { /* strategy == PF_MRU */
-        PFbufLinkTail(bpage);
-    }
+	PFbufLinkHead(bpage); 
 
 	return(PFE_OK);
 }
@@ -345,13 +336,6 @@ int PFbufUsed(int fd, int pagenum)
 
 	bpage->dirty = TRUE;
 
-    /*
-     * NO RE-LINKING HERE.
-     * This function is called by PF_AllocPage, which just needs
-     * to mark the page dirty. The page is already at the
-     * head of the list from PFbufInternalAlloc.
-     */
-
 	return(PFE_OK);
 }
 
@@ -391,9 +375,8 @@ void PFbufPrint()
 }
 
 
-/****************************************************************************
- * Statistics Interface Functions
- ****************************************************************************/
+
+// Statistics Interface Functions
 
 void PFbufResetStats()
 {

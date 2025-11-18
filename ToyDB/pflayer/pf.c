@@ -13,7 +13,7 @@
 #define L_SET 0
 #endif
 
-int PFerrno = PFE_OK;	/* last error message */
+int PFerrno = PFE_OK;
 
 /* table of opened files - NOT static, so buf.c can see it */
 PFftab_ele PFftab[PF_FTAB_SIZE]; 

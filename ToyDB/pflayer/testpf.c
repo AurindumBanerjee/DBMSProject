@@ -1,10 +1,3 @@
-/*
- * testpf.c
- *
- * This program is designed to test the PF buffer manager (Objective 1).
- * It runs a mixed read/write workload based on environment variables
- * and prints statistics in a format parsable by graphTest.py.
- */
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
