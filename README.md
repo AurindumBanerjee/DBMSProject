@@ -49,7 +49,27 @@ These graphs show:
 - In **random workloads**, LRU ≈ MRU → expected behavior  
 - In **sequential workloads**:
   - **LRU performs poorly**, repeatedly evicting pages needed next  
-  - **MRU performs optimally**, keeping older pages in memory → *dramatically fewer reads*  
+  - **MRU performs optimally**, keeping older pages in memory → *dramatically fewer reads*
+ 
+## Build & Run Instructions
+
+Compile Test Files
+```
+# Compile Random Access Test (LRU & MRU)
+gcc -DStrategy=PF_LRU -o testpf_LRU testpf.c pf.c buf.c hash.c
+gcc -DStrategy=PF_MRU -o testpf_MRU testpf.c pf.c buf.c hash.c
+
+# Compile Sequential Access Test (LRU & MRU)
+gcc -DSTRATEGY=PF_LRU -o testpf_seq_LRU testpf_seq.c pf.c buf.c hash.c
+gcc -DSTRATEGY=PF_MRU -o testpf_seq_MRU testpf_seq.c pf.c buf.c hash.c
+
+```
+
+Generate Performance Plots
+```
+python3 graphSeqTest.py
+python3 graphRandomTest.py
+```
 
 ---
 
@@ -73,6 +93,15 @@ Findings:
 
 - **Slotted page** achieved the *worst space efficiency* in our implementation.
 - Static layouts waste space as maximum record size increased  .  
+
+## Build & Run Instructions
+
+```
+cd amlayer/
+make clean 
+make 
+./test_am3
+```
 
 ---
 
@@ -103,5 +132,17 @@ Summary:
 - **Optimized sorted bulk load** is *better*:  
   - Lowest I/O  
   - Fastest runtime  
+
+## Build & Run Instructions
+
+```
+cd rmlayer/
+make clean 
+make 
+./test_rm
+```
+
+
+
 
 
